@@ -175,7 +175,7 @@ export default function MesBonsCadeauPage() {
 
                   {isActive && (
                     <Link
-                      href="/reserver"
+                      href={`/reserver?voucherId=${v.id}`}
                       className="mt-3 flex items-center justify-center gap-1.5 text-sm text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/5 transition-colors"
                     >
                       Utiliser pour réserver <ArrowRight className="w-3.5 h-3.5" />

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { resend, EMAIL_FROM } from "@/lib/resend";
+import BookingConfirmationEmail from "@/../emails/booking-confirmation";
 import { z } from "zod";
 import { canCancelBooking } from "@/lib/utils";
 
@@ -102,18 +104,29 @@ export async function POST(req: NextRequest) {
     });
     // Participants supplémentaires payés à l'unité
     totalAmount = unitPrice * (participantCount - 1);
+  } else if (paymentMethod === "GIFT_VOUCHER") {
+    if (!giftVoucherId) return NextResponse.json({ error: "Bon cadeau requis" }, { status: 400 });
+    const voucher = await prisma.giftVoucher.findFirst({
+      where: { id: giftVoucherId, status: "ACTIVE" },
+    });
+    if (!voucher) return NextResponse.json({ error: "Bon cadeau invalide ou déjà utilisé" }, { status: 400 });
+    const voucherValue = Number(voucher.amountValue ?? 0);
+    const fullPrice = unitPrice * participantCount;
+    totalAmount = Math.max(0, fullPrice - voucherValue);
   } else if (paymentMethod === "STRIPE") {
     totalAmount = unitPrice * participantCount;
   }
+
+  const needsStripePayment = totalAmount > 0;
 
   // Créer la réservation en base
   const booking = await prisma.booking.create({
     data: {
       userId: session.user.id,
       courseSlotId,
-      status: paymentMethod === "STRIPE" && totalAmount > 0 ? "PENDING" : "CONFIRMED",
+      status: needsStripePayment ? "PENDING" : "CONFIRMED",
       paymentMethod,
-      paymentStatus: paymentMethod === "STRIPE" && totalAmount > 0 ? "PENDING" : "PAID",
+      paymentStatus: needsStripePayment ? "PENDING" : "PAID",
       amountPaid: totalAmount,
       carnetId,
       subscriptionId,
@@ -125,8 +138,16 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Si paiement Stripe nécessaire, créer une session de paiement
-  if (paymentMethod === "STRIPE" && totalAmount > 0) {
+  // Bon cadeau gratuit (0€) → marquer comme utilisé immédiatement
+  if (paymentMethod === "GIFT_VOUCHER" && giftVoucherId && !needsStripePayment) {
+    await prisma.giftVoucher.update({
+      where: { id: giftVoucherId },
+      data: { status: "REDEEMED", redeemedAt: new Date() },
+    });
+  }
+
+  // Si paiement Stripe nécessaire (STRIPE ou GIFT_VOUCHER partiel), créer une session
+  if (needsStripePayment) {
     const stripeSession = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -145,7 +166,10 @@ export async function POST(req: NextRequest) {
       mode: "payment",
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/mon-espace/reservations?success=true&bookingId=${booking.id}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/reserver?cancelled=true`,
-      metadata: { bookingId: booking.id },
+      metadata: {
+        bookingId: booking.id,
+        giftVoucherId: giftVoucherId ?? "",
+      },
     });
 
     await prisma.booking.update({
@@ -154,6 +178,36 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ checkoutUrl: stripeSession.url, bookingId: booking.id });
+  }
+
+  // Réservation confirmée sans paiement → envoyer email de confirmation
+  const fullBooking = await prisma.booking.findUnique({
+    where: { id: booking.id },
+    include: {
+      user: true,
+      slot: { include: { serviceType: true } },
+      participants: true,
+    },
+  });
+
+  if (fullBooking) {
+    const slotDate = new Date(fullBooking.slot.startTime);
+    resend.emails.send({
+      from: EMAIL_FROM,
+      to: fullBooking.user.email,
+      subject: `Confirmation de votre réservation — ${fullBooking.slot.serviceType.name}`,
+      react: BookingConfirmationEmail({
+        clientName: fullBooking.user.firstName ?? fullBooking.user.name ?? "Client",
+        serviceName: fullBooking.slot.serviceType.name,
+        date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        bookingId: fullBooking.id,
+        participants: fullBooking.participants,
+        paymentMethod: paymentMethod === "GIFT_VOUCHER" ? "Bon cadeau" : paymentMethod === "CARNET" ? "Carnet" : "Abonnement",
+        totalPaid: `${Number(fullBooking.amountPaid).toFixed(2)} €`,
+        appUrl: process.env.NEXT_PUBLIC_APP_URL!,
+      }),
+    }).catch((e) => console.error("[bookings] Email échoué:", e));
   }
 
   return NextResponse.json({ bookingId: booking.id, status: "confirmed" });

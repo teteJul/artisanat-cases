@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { resend, EMAIL_FROM } from "@/lib/resend";
+import BookingConfirmationEmail from "@/../emails/booking-confirmation";
 import { Metadata } from "next";
 import { MesReservations } from "@/components/booking/mes-reservations";
 
@@ -21,7 +23,13 @@ export default async function MesReservationsPage({
   if (params.success === "true" && params.bookingId) {
     const booking = await prisma.booking.findUnique({
       where: { id: params.bookingId },
-      select: { id: true, status: true, stripeSessionId: true },
+      select: {
+        id: true, status: true, stripeSessionId: true, giftVoucherId: true,
+        amountPaid: true,
+        user: { select: { email: true, firstName: true, name: true } },
+        slot: { include: { serviceType: true } },
+        participants: true,
+      },
     });
 
     if (booking && booking.status === "PENDING" && booking.stripeSessionId) {
@@ -36,6 +44,33 @@ export default async function MesReservationsPage({
               stripePaymentId: stripeSession.payment_intent as string,
             },
           });
+
+          // Marquer le bon cadeau comme utilisé si présent
+          if (booking.giftVoucherId) {
+            await prisma.giftVoucher.update({
+              where: { id: booking.giftVoucherId },
+              data: { status: "REDEEMED", redeemedAt: new Date() },
+            }).catch(() => {});
+          }
+
+          // Envoyer email de confirmation
+          const slotDate = new Date(booking.slot.startTime);
+          await resend.emails.send({
+            from: EMAIL_FROM,
+            to: booking.user.email,
+            subject: `Confirmation de votre réservation — ${booking.slot.serviceType.name}`,
+            react: BookingConfirmationEmail({
+              clientName: booking.user.firstName ?? booking.user.name ?? "Client",
+              serviceName: booking.slot.serviceType.name,
+              date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+              time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+              bookingId: booking.id,
+              participants: booking.participants,
+              paymentMethod: "Carte bancaire",
+              totalPaid: `${Number(booking.amountPaid).toFixed(2)} €`,
+              appUrl: process.env.NEXT_PUBLIC_APP_URL!,
+            }),
+          }).catch((e) => console.error("[reservations] Email échoué:", e));
         }
       } catch (e) {
         console.error("[reservations] Vérification Stripe échouée:", e);

@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
     const bookingId = checkoutSession.metadata?.bookingId;
+    const metaGiftVoucherId = checkoutSession.metadata?.giftVoucherId;
     if (!bookingId) return NextResponse.json({ received: true });
 
     const booking = await prisma.booking.update({
@@ -39,6 +40,14 @@ export async function POST(req: NextRequest) {
         participants: true,
       },
     });
+
+    // Marquer le bon cadeau comme utilisé si paiement partiel
+    if (metaGiftVoucherId) {
+      await prisma.giftVoucher.update({
+        where: { id: metaGiftVoucherId },
+        data: { status: "REDEEMED", redeemedAt: new Date() },
+      }).catch(() => {});
+    }
 
     const slotDate = new Date(booking.slot.startTime);
 

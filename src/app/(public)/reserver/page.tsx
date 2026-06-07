@@ -7,21 +7,32 @@ export const metadata: Metadata = {
   description: "Réservez votre cours de poterie ou atelier céramique en ligne.",
 };
 
-export default async function ReserverPage() {
-  const [rawServices, cancellationSetting] = await Promise.all([
+export default async function ReserverPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ voucherId?: string }>;
+}) {
+  const { voucherId } = await searchParams;
+
+  const [rawServices, cancellationSetting, voucher] = await Promise.all([
     prisma.serviceType.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     }),
     prisma.appSetting.findUnique({ where: { key: "cancellation_deadline_hours" } }),
+    voucherId
+      ? prisma.giftVoucher.findUnique({
+          where: { id: voucherId, status: "ACTIVE" },
+          select: { id: true, code: true, description: true, amountValue: true },
+        })
+      : null,
   ]);
 
-  const serviceTypes = rawServices.map((s) => ({
-    ...s,
-    price: Number(s.price),
-  }));
-
+  const serviceTypes = rawServices.map((s) => ({ ...s, price: Number(s.price) }));
   const cancellationDeadlineHours = parseInt(cancellationSetting?.value ?? "48");
+  const serializedVoucher = voucher
+    ? { ...voucher, amountValue: Number(voucher.amountValue) }
+    : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -32,7 +43,11 @@ export default async function ReserverPage() {
           l'avance.
         </p>
       </div>
-      <BookingCalendar serviceTypes={serviceTypes} cancellationDeadlineHours={cancellationDeadlineHours} />
+      <BookingCalendar
+        serviceTypes={serviceTypes}
+        cancellationDeadlineHours={cancellationDeadlineHours}
+        giftVoucher={serializedVoucher}
+      />
     </div>
   );
 }
