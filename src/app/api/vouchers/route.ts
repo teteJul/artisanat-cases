@@ -62,6 +62,11 @@ export async function POST(req: NextRequest) {
     metadata: { voucherId: voucher.id, recipientEmail: recipientEmail ?? "" },
   });
 
+  await prisma.giftVoucher.update({
+    where: { id: voucher.id },
+    data: { stripeSessionId: session.id },
+  });
+
   return NextResponse.json({ checkoutUrl: session.url, voucherId: voucher.id });
 }
 
@@ -84,6 +89,7 @@ export async function PUT(req: NextRequest) {
     where: { code },
     data: { ownerId: session.user.id },
   });
+
 
   return NextResponse.json({ success: true, voucher });
 }
