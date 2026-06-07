@@ -1,0 +1,403 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  firstName     String?
+  lastName      String?
+  phone         String?
+  password      String?
+  role          Role      @default(CLIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[]
+  carnets       Carnet[]
+  subscriptions Subscription[]
+  giftVouchers  GiftVoucher[]  @relation("VoucherOwner")
+  waitlists     Waitlist[]
+  credits       Credit[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Services & Cours ────────────────────────────────────────────────────────
+
+model ServiceType {
+  id               String     @id @default(cuid())
+  name             String
+  description      String?    @db.Text
+  shortDescription String?
+  type             CourseType
+  durationMinutes  Int
+  price            Decimal    @db.Decimal(10, 2)
+  maxParticipants  Int        @default(10)
+  allowMultiPerson Boolean    @default(false)
+  allowCarnet      Boolean    @default(false)
+  isActive         Boolean    @default(true)
+  color            String?
+  imageUrl         String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  slots   CourseSlot[]
+  carnets Carnet[]
+
+  @@map("service_types")
+}
+
+model CourseSlot {
+  id              String   @id @default(cuid())
+  serviceTypeId   String
+  startTime       DateTime
+  endTime         DateTime
+  maxParticipants Int
+  isActive        Boolean  @default(true)
+  isCancelled     Boolean  @default(false)
+  cancelReason    String?
+  recurrenceId    String?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id])
+  bookings    Booking[]
+  waitlists   Waitlist[]
+
+  @@map("course_slots")
+}
+
+// ─── Réservations ────────────────────────────────────────────────────────────
+
+model Booking {
+  id              String        @id @default(cuid())
+  userId          String
+  courseSlotId    String
+  status          BookingStatus @default(PENDING)
+  paymentMethod   PaymentMethod
+  paymentStatus   PaymentStatus @default(PENDING)
+  stripePaymentId String?
+  stripeSessionId String?
+  amountPaid      Decimal?      @db.Decimal(10, 2)
+  carnetId        String?
+  subscriptionId  String?
+  giftVoucherId   String?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  creditIssued    Boolean       @default(false)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id])
+  slot         CourseSlot           @relation(fields: [courseSlotId], references: [id])
+  carnet       Carnet?              @relation(fields: [carnetId], references: [id])
+  subscription Subscription?        @relation(fields: [subscriptionId], references: [id])
+  giftVoucher  GiftVoucher?         @relation(fields: [giftVoucherId], references: [id])
+  participants BookingParticipant[]
+
+  @@map("bookings")
+}
+
+model BookingParticipant {
+  id           String  @id @default(cuid())
+  bookingId    String
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  age          Int?
+  isMainBooker Boolean @default(false)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_participants")
+}
+
+// ─── Liste d'attente ─────────────────────────────────────────────────────────
+
+model Waitlist {
+  id           String    @id @default(cuid())
+  userId       String
+  courseSlotId String
+  notifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User       @relation(fields: [userId], references: [id])
+  slot CourseSlot @relation(fields: [courseSlotId], references: [id])
+
+  @@unique([userId, courseSlotId])
+  @@map("waitlists")
+}
+
+// ─── Carnets ─────────────────────────────────────────────────────────────────
+
+model Carnet {
+  id              String   @id @default(cuid())
+  userId          String
+  serviceTypeId   String
+  totalCredits    Int
+  usedCredits     Int      @default(0)
+  stripePaymentId String?
+  purchasedAt     DateTime @default(now())
+  expiresAt       DateTime
+  isActive        Boolean  @default(true)
+
+  user        User        @relation(fields: [userId], references: [id])
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id])
+  bookings    Booking[]
+
+  @@map("carnets")
+}
+
+// ─── Abonnements ─────────────────────────────────────────────────────────────
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?  @db.Text
+  coursesPerCycle Int
+  cycleType       String
+  totalCourses    Int
+  price           Decimal  @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  userId           String
+  planId           String
+  status           SubscriptionStatus @default(ACTIVE)
+  remainingCredits Int
+  stripePaymentId  String?
+  startDate        DateTime
+  endDate          DateTime
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  user     User             @relation(fields: [userId], references: [id])
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  bookings Booking[]
+
+  @@map("subscriptions")
+}
+
+// ─── Bons Cadeaux ────────────────────────────────────────────────────────────
+
+model GiftVoucher {
+  id              String        @id @default(cuid())
+  code            String        @unique @default(cuid())
+  ownerId         String?
+  purchaserName   String?
+  purchaserEmail  String?
+  serviceTypeId   String?
+  amountValue     Decimal?      @db.Decimal(10, 2)
+  description     String?
+  stripePaymentId String?
+  status          VoucherStatus @default(ACTIVE)
+  isAutoGenerated Boolean       @default(false)
+  pdfUrl          String?
+  purchasedAt     DateTime      @default(now())
+  expiresAt       DateTime?
+  redeemedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  owner    User?     @relation("VoucherOwner", fields: [ownerId], references: [id])
+  bookings Booking[]
+
+  @@map("gift_vouchers")
+}
+
+// ─── Crédits client ──────────────────────────────────────────────────────────
+
+model Credit {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Decimal  @db.Decimal(10, 2)
+  reason    String
+  bookingId String?
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("credits")
+}
+
+// ─── Catalogue Boutique ───────────────────────────────────────────────────────
+
+model CatalogItem {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  imageUrls   String[]
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("catalog_items")
+}
+
+// ─── Galerie ─────────────────────────────────────────────────────────────────
+
+model GalleryImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("gallery_images")
+}
+
+// ─── Pièces peinture céramique ───────────────────────────────────────────────
+
+model PaintingPiece {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  imageUrl    String?
+  isAvailable Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("painting_pieces")
+}
+
+// ─── Vacances scolaires ──────────────────────────────────────────────────────
+
+model SchoolHoliday {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  zone      String   @default("C")
+  year      Int
+  isManual  Boolean  @default(false)
+
+  @@map("school_holidays")
+}
+
+// ─── Paramètres application ──────────────────────────────────────────────────
+
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  CLIENT
+  ADMIN
+}
+
+enum CourseType {
+  COLLECTIVE_POTTERY
+  PRIVATE_POTTERY
+  PRIVATE_GROUP_POTTERY
+  PAINTING
+  BIRTHDAY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED_BY_CLIENT
+  CANCELLED_BY_ADMIN
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  STRIPE
+  CARNET
+  SUBSCRIPTION
+  GIFT_VOUCHER
+  CREDIT
+  ON_SITE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum VoucherStatus {
+  ACTIVE
+  REDEEMED
+  EXPIRED
+  CANCELLED
+}
