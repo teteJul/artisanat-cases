@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       serviceTypeId,
       purchaserName,
       purchaserEmail,
+      recipientEmail: recipientEmail || null,
       description: `Bon cadeau — ${serviceType.name}`,
       status: "ACTIVE",
       expiresAt,

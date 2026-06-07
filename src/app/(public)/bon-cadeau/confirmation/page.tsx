@@ -58,9 +58,14 @@ export default async function BonCadeauConfirmationPage({
           ? voucher.expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
           : "1 an après l'achat";
 
+        const recipients = [voucher.purchaserEmail];
+        if (voucher.recipientEmail && voucher.recipientEmail !== voucher.purchaserEmail) {
+          recipients.push(voucher.recipientEmail);
+        }
+
         await resend.emails.send({
           from: EMAIL_FROM,
-          to: voucher.purchaserEmail,
+          to: recipients,
           subject: `Votre bon cadeau Artisanat Cases — Code : ${voucher.code}`,
           react: VoucherConfirmationEmail({
             purchaserName: voucher.purchaserName ?? "Client",
