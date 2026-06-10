@@ -20,7 +20,7 @@ export async function POST(
 
   const booking = await prisma.booking.findFirst({
     where: { id, userId: session.user.id },
-    include: { slot: { include: { serviceType: true } }, participants: true },
+    include: { slot: { include: { serviceType: true } }, participants: true, user: true },
   });
 
   if (!booking) return NextResponse.json({ error: "Réservation introuvable" }, { status: 404 });
@@ -70,6 +70,30 @@ export async function POST(
       });
     }
   }
+
+  // Email d'annulation au client
+  const slotDateForEmail = new Date(booking.slot.startTime);
+  resend.emails.send({
+    from: EMAIL_FROM,
+    to: booking.user.email,
+    subject: `Annulation de votre réservation — ${booking.slot.serviceType.name}`,
+    html: `
+      <h2>Votre réservation a été annulée</h2>
+      <p>Bonjour ${booking.user.firstName ?? booking.user.name ?? "Client"},</p>
+      <p>Votre réservation pour <strong>${booking.slot.serviceType.name}</strong> du <strong>${slotDateForEmail.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} à ${slotDateForEmail.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</strong> a bien été annulée.</p>
+      ${canCancel && Number(booking.amountPaid) > 0
+        ? action === "refund"
+          ? "<p>Un remboursement a été initié sur votre carte bancaire (3-5 jours ouvrés).</p>"
+          : action === "credit"
+          ? `<p>Un crédit de ${Number(booking.amountPaid).toFixed(2)} € a été ajouté à votre compte.</p>`
+          : ""
+        : !canCancel && Number(booking.amountPaid) > 0
+        ? "<p>Cette annulation étant tardive (moins de 48h avant le cours), aucun remboursement ne sera effectué.</p>"
+        : ""
+      }
+      <p style="color:#9a6b50;font-size:13px;">— L'équipe Artisanat Cases</p>
+    `,
+  }).catch((e) => console.error("[cancel] Email échoué:", e));
 
   // Notifier la liste d'attente
   const waitlist = await prisma.waitlist.findMany({
