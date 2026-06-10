@@ -12,7 +12,7 @@ const serviceSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   shortDescription: z.string().optional(),
-  type: z.enum(["COLLECTIVE_POTTERY","PRIVATE_POTTERY","PRIVATE_GROUP_POTTERY","PAINTING","BIRTHDAY"]),
+  type: z.enum(["COLLECTIVE_POTTERY","PRIVATE_POTTERY","PRIVATE_GROUP_POTTERY","PAINTING","BIRTHDAY","COURS"]),
   durationMinutes: z.number().int().positive(),
   price: z.number().positive(),
   maxParticipants: z.number().int().positive().default(10),

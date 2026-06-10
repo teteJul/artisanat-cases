@@ -365,6 +365,7 @@ enum CourseType {
   PRIVATE_GROUP_POTTERY
   PAINTING
   BIRTHDAY
+  COURS
 }
 
 enum BookingStatus {

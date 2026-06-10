@@ -37,7 +37,7 @@ const SERVICE_TYPES = [
   { value: "PRIVATE_GROUP_POTTERY", label: "Poterie — Cours groupe" },
   { value: "PAINTING", label: "Peinture" },
   { value: "BIRTHDAY", label: "Événement / Anniversaire" },
-  { value: "COURSE", label: "Cours" },
+  { value: "COURS", label: "Cours" },
 ];
 
 function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
@@ -221,13 +221,28 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
           <div className="bg-card border border-border rounded-xl p-5">
             <h3 className="font-medium text-foreground mb-4">Ajouter un service</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <input type="text" placeholder="Nom du service *" value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-              <select value={newService.type} onChange={(e) => setNewService({ ...newService, type: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              <input type="number" placeholder="Prix (€) *" value={newService.price} onChange={(e) => setNewService({ ...newService, price: e.target.value })} step="0.5" className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-              <input type="number" placeholder="Durée (min)" value={newService.durationMinutes} onChange={(e) => setNewService({ ...newService, durationMinutes: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-              <input type="number" placeholder="Capacité max" value={newService.maxParticipants} onChange={(e) => setNewService({ ...newService, maxParticipants: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Nom du service *</label>
+                <input type="text" placeholder="Ex : Cours collectif débutant" value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Type de service *</label>
+                <select value={newService.type} onChange={(e) => setNewService({ ...newService, type: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Prix (€) *</label>
+                <input type="number" placeholder="Ex : 15" value={newService.price} onChange={(e) => setNewService({ ...newService, price: e.target.value })} step="0.5" className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Durée (minutes)</label>
+                <input type="number" placeholder="Ex : 90" value={newService.durationMinutes} onChange={(e) => setNewService({ ...newService, durationMinutes: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Capacité max (personnes)</label>
+                <input type="number" placeholder="Ex : 10" value={newService.maxParticipants} onChange={(e) => setNewService({ ...newService, maxParticipants: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
                   <input type="checkbox" checked={newService.allowCarnet} onChange={(e) => setNewService({ ...newService, allowCarnet: e.target.checked })} className="rounded" />

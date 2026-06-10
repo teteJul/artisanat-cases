@@ -7,12 +7,12 @@ const contactSchema = z.object({
   email: z.string().email(),
   phone: z.string().optional(),
   subject: z.string().min(2),
-  message: z.string().min(10),
+  message: z.string().min(5),
 });
 
 export async function POST(req: NextRequest) {
   const parsed = contactSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Veuillez remplir tous les champs obligatoires." }, { status: 400 });
 
   const { name, email, phone, subject, message } = parsed.data;
 
