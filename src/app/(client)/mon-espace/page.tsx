@@ -98,7 +98,7 @@ export default async function MonEspacePage() {
                 <div className="flex items-center gap-3">
                   {canCancelBooking(booking.slot.startTime) && (
                     <Link
-                      href={`/mon-espace/reservations/${booking.id}/annuler`}
+                      href="/mon-espace/reservations"
                       className="text-xs text-destructive hover:underline"
                     >
                       Annuler
