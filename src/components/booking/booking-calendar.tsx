@@ -61,6 +61,8 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
   );
   const [booking, setBooking] = useState(false);
   const [step, setStep] = useState<"service" | "slot" | "participants" | "payment">("service");
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [waitlistError, setWaitlistError] = useState("");
 
   useEffect(() => {
     if (!session?.user) return;
@@ -135,13 +137,19 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
     }
     if (!selectedSlot) return;
 
-    await fetch("/api/waitlist", {
+    setWaitlistError("");
+    const res = await fetch("/api/waitlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ courseSlotId: selectedSlot.id }),
     });
 
-    alert("Vous avez été ajouté à la liste d'attente. Nous vous préviendrons si une place se libère.");
+    const data = await res.json();
+    if (!res.ok) {
+      setWaitlistError(data.error ?? "Une erreur est survenue.");
+    } else {
+      setWaitlistSuccess(true);
+    }
   }
 
   const selectedServiceType = serviceTypes.find((s) => s.id === selectedService);
@@ -360,13 +368,25 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
 
               {selectedSlot.isFull ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-destructive font-medium">Ce créneau est complet.</p>
-                  <button
-                    onClick={handleWaitlist}
-                    className="w-full border border-primary text-primary py-2.5 rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
-                  >
-                    Rejoindre la liste d'attente
-                  </button>
+                  {waitlistSuccess ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <p className="text-sm font-medium text-green-800">✅ Vous êtes sur la liste d'attente !</p>
+                      <p className="text-xs text-green-700 mt-1">Vous recevrez un email dès qu'une place se libère sur ce créneau.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-destructive font-medium">Ce créneau est complet.</p>
+                      {waitlistError && (
+                        <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{waitlistError}</p>
+                      )}
+                      <button
+                        onClick={handleWaitlist}
+                        className="w-full border border-primary text-primary py-2.5 rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
+                      >
+                        Rejoindre la liste d'attente
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <button
