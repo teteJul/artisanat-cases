@@ -55,7 +55,7 @@ export default function VoucherConfirmationEmail({
             <Text style={footerText}>
               Artisanat Cases — Atelier de poterie
               <br />
-              Pour toute question : contact@artisanatcases.fr
+              Pour toute question : manon@artisanatcases.fr
             </Text>
           </Section>
         </Container>

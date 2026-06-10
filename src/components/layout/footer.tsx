@@ -27,8 +27,8 @@ export function Footer() {
               </li>
               <li className="flex items-start gap-2">
                 <Mail className="w-4 h-4 mt-0.5 text-primary shrink-0" />
-                <a href="mailto:contact@artisanatcases.fr" className="hover:text-background transition-colors">
-                  contact@artisanatcases.fr
+                <a href="mailto:manon@artisanatcases.fr" className="hover:text-background transition-colors">
+                  manon@artisanatcases.fr
                 </a>
               </li>
             </ul>

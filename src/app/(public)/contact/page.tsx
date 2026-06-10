@@ -111,8 +111,8 @@ export default function ContactPage() {
                 <Mail className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Email</p>
-                  <a href="mailto:contact@artisanatcases.fr" className="text-sm text-primary hover:underline">
-                    contact@artisanatcases.fr
+                  <a href="mailto:manon@artisanatcases.fr" className="text-sm text-primary hover:underline">
+                    manon@artisanatcases.fr
                   </a>
                 </div>
               </div>

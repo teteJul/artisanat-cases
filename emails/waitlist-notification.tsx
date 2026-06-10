@@ -56,7 +56,7 @@ export default function WaitlistNotificationEmail({
             </Text>
           </Section>
           <Section style={footer}>
-            <Text style={footerText}>Artisanat Cases · contact@artisanatcases.fr</Text>
+            <Text style={footerText}>Artisanat Cases · manon@artisanatcases.fr</Text>
           </Section>
         </Container>
       </Body>

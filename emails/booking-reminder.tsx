@@ -53,7 +53,7 @@ export default function BookingReminderEmail({
           </Section>
           <Section style={footer}>
             <Text style={footerText}>
-              Artisanat Cases · contact@artisanatcases.fr
+              Artisanat Cases · manon@artisanatcases.fr
             </Text>
           </Section>
         </Container>
