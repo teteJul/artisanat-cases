@@ -135,25 +135,15 @@ function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 
             <div className="border-t border-border pt-4">
               {cancelStep === "done" ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                  ✅ Réservation annulée. {cancelAction === "credit" ? "Un avoir a été crédité sur votre compte." : "Un remboursement a été initié."}
+                  ✅ Réservation annulée. Un avoir a été crédité sur votre compte.
                 </div>
               ) : cancelStep === "confirm" ? (
                 <div className="space-y-3">
                   {canCancel ? (
-                    <>
-                      <p className="text-sm text-foreground font-medium">Comment souhaitez-vous être remboursé ?</p>
-                      <div className="flex gap-4">
-                        {[
-                          { value: "credit", label: "💳 Avoir en compte" },
-                          { value: "refund", label: "↩ Remboursement carte" },
-                        ].map((opt) => (
-                          <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input type="radio" value={opt.value} checked={cancelAction === opt.value} onChange={() => setCancelAction(opt.value as "credit" | "refund")} />
-                            {opt.label}
-                          </label>
-                        ))}
-                      </div>
-                    </>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-800 font-medium">ℹ Annulation gratuite</p>
+                      <p className="text-xs text-blue-700 mt-0.5">Un avoir sera crédité sur votre compte et utilisable pour votre prochaine réservation.</p>
+                    </div>
                   ) : (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <p className="text-sm text-amber-800 font-medium">⚠ Annulation tardive</p>
