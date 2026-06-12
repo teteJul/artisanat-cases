@@ -40,7 +40,17 @@ export async function POST(req: NextRequest) {
   // Vérifier le créneau
   const slot = await prisma.courseSlot.findUnique({
     where: { id: courseSlotId },
-    include: { serviceType: true, bookings: { where: { status: { not: "CANCELLED_BY_CLIENT" } } } },
+    include: {
+      serviceType: true,
+      bookings: {
+        where: {
+          OR: [
+            { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
+            { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
+          ],
+        },
+      },
+    },
   });
 
   if (!slot || !slot.isActive || slot.isCancelled) {

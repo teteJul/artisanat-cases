@@ -44,7 +44,14 @@ export async function GET(req: NextRequest) {
     where: { startTime: { gte: periodStart } },
     include: {
       serviceType: true,
-      bookings: { where: { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN"] } } },
+      bookings: {
+        where: {
+          OR: [
+            { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
+            { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
+          ],
+        },
+      },
     },
   });
 

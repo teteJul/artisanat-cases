@@ -87,8 +87,14 @@ export default async function MesReservationsPage({
     prisma.booking.findMany({
       where: {
         userId: session.user.id,
-        status: { in: ["CONFIRMED", "PENDING"] },
-        slot: { startTime: { gte: now } },
+        OR: [
+          { status: "CONFIRMED", slot: { startTime: { gte: now } } },
+          {
+            status: "PENDING",
+            slot: { startTime: { gte: now } },
+            createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+          },
+        ],
       },
       include: {
         slot: { include: { serviceType: true } },

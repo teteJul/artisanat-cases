@@ -93,7 +93,12 @@ export async function GET(req: NextRequest) {
     include: {
       serviceType: true,
       bookings: {
-        where: { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN"] } },
+        where: {
+          OR: [
+            { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
+            { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
+          ],
+        },
         include: { participants: true, user: { select: { id: true, firstName: true, lastName: true, email: true } } },
       },
       waitlists: { include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } },
