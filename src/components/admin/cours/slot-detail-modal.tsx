@@ -47,6 +47,10 @@ export function SlotDetailModal({ slot, onClose, onUpdated }: Props) {
   const [cancelAction, setCancelAction] = useState<"refund" | "credit">("credit");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editingPlaces, setEditingPlaces] = useState(false);
+  const [newMaxParticipants, setNewMaxParticipants] = useState(slot.maxParticipants);
+  const [placesError, setPlacesError] = useState("");
+  const [placesLoading, setPlacesLoading] = useState(false);
 
   const booked = slot.bookings.filter((b) => b.status === "CONFIRMED").length;
   const revenue = slot.bookings
@@ -62,6 +66,27 @@ export function SlotDetailModal({ slot, onClose, onUpdated }: Props) {
     });
     setLoading(false);
     onUpdated();
+  }
+
+  async function handleUpdatePlaces() {
+    if (newMaxParticipants < booked) {
+      setPlacesError(`Impossible : ${booked} réservation(s) confirmée(s) sur ce créneau.`);
+      return;
+    }
+    setPlacesLoading(true);
+    setPlacesError("");
+    const res = await fetch(`/api/admin/slots/${slot.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxParticipants: newMaxParticipants }),
+    });
+    setPlacesLoading(false);
+    if (res.ok) {
+      setEditingPlaces(false);
+      onUpdated();
+    } else {
+      setPlacesError("Une erreur est survenue.");
+    }
   }
 
   async function handleDelete() {
@@ -101,6 +126,36 @@ export function SlotDetailModal({ slot, onClose, onUpdated }: Props) {
             <div className="bg-secondary/50 rounded-xl p-4 text-center">
               <p className="text-xl font-bold text-foreground">{booked}/{slot.maxParticipants}</p>
               <p className="text-xs text-muted-foreground mt-1">Réservations</p>
+              {!slot.isCancelled && (
+                editingPlaces ? (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-1 justify-center">
+                      <button onClick={() => setNewMaxParticipants(Math.max(booked, newMaxParticipants - 1))} className="w-6 h-6 bg-secondary border border-border rounded text-sm font-bold hover:bg-muted">−</button>
+                      <input
+                        type="number"
+                        value={newMaxParticipants}
+                        min={booked}
+                        onChange={(e) => setNewMaxParticipants(parseInt(e.target.value) || booked)}
+                        className="w-12 text-center border border-input rounded px-1 py-0.5 text-sm bg-background"
+                      />
+                      <button onClick={() => setNewMaxParticipants(newMaxParticipants + 1)} className="w-6 h-6 bg-secondary border border-border rounded text-sm font-bold hover:bg-muted">+</button>
+                    </div>
+                    {placesError && <p className="text-xs text-destructive">{placesError}</p>}
+                    <div className="flex gap-1 justify-center">
+                      <button onClick={handleUpdatePlaces} disabled={placesLoading} className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded hover:bg-primary/90 disabled:opacity-50">
+                        {placesLoading ? "..." : "OK"}
+                      </button>
+                      <button onClick={() => { setEditingPlaces(false); setNewMaxParticipants(slot.maxParticipants); setPlacesError(""); }} className="text-xs border border-border px-2 py-0.5 rounded hover:bg-secondary">
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditingPlaces(true)} className="mt-1 text-xs text-primary hover:underline">
+                    Modifier
+                  </button>
+                )
+              )}
             </div>
             <div className="bg-secondary/50 rounded-xl p-4 text-center">
               <p className="text-xl font-bold text-foreground">{slot.waitlists.length}</p>

@@ -15,6 +15,36 @@ export async function PATCH(
   return NextResponse.json(slot);
 }
 
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (session?.user?.role !== "ADMIN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+
+  const { id } = await params;
+  const { maxParticipants } = await req.json();
+
+  // Vérifier qu'on ne descend pas en dessous des réservations confirmées
+  const bookedCount = await prisma.booking.count({
+    where: { courseSlotId: id, status: "CONFIRMED" },
+  });
+
+  if (maxParticipants < bookedCount) {
+    return NextResponse.json(
+      { error: `Impossible : ${bookedCount} réservation(s) confirmée(s) sur ce créneau.` },
+      { status: 400 }
+    );
+  }
+
+  const slot = await prisma.courseSlot.update({
+    where: { id },
+    data: { maxParticipants },
+  });
+
+  return NextResponse.json(slot);
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
