@@ -41,12 +41,14 @@ interface BookingCalendarProps {
   serviceTypes: ServiceType[];
   cancellationDeadlineHours?: number;
   giftVoucher?: GiftVoucher | null;
+  preselectedServiceId?: string;
+  preselectedSlotId?: string;
 }
 
-export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, giftVoucher }: BookingCalendarProps) {
+export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, giftVoucher, preselectedServiceId, preselectedSlotId }: BookingCalendarProps) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string | null>(preselectedServiceId ?? null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
@@ -78,7 +80,13 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
     setLoading(true);
     fetch(`/api/slots?serviceTypeId=${selectedService}`)
       .then((r) => r.json())
-      .then((data) => setSlots(data))
+      .then((data) => {
+        setSlots(data);
+        if (preselectedSlotId) {
+          const slot = data.find((s: Slot) => s.id === preselectedSlotId);
+          if (slot) setSelectedSlot(slot);
+        }
+      })
       .finally(() => setLoading(false));
   }, [selectedService]);
 

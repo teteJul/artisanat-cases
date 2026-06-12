@@ -104,7 +104,7 @@ export async function POST(
 
   if (waitlist.length > 0) {
     const slotDate = new Date(booking.slot.startTime);
-    const bookingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reserver`;
+    const bookingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reserver?slotId=${booking.courseSlotId}&serviceId=${booking.slot.serviceType.id ?? ""}`;
 
     for (const entry of waitlist) {
       await resend.emails.send({

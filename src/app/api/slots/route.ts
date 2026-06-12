@@ -25,7 +25,16 @@ export async function GET(req: NextRequest) {
     include: {
       serviceType: true,
       bookings: {
-        where: { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN"] } },
+        where: {
+          OR: [
+            { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
+            // PENDING récents (< 30 min) comptent pour éviter la surréservation
+            {
+              status: "PENDING",
+              createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+            },
+          ],
+        },
         select: { id: true, participants: { select: { id: true } } },
       },
       waitlists: { select: { id: true } },

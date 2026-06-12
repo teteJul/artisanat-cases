@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 export default async function ReserverPage({
   searchParams,
 }: {
-  searchParams: Promise<{ voucherId?: string }>;
+  searchParams: Promise<{ voucherId?: string; slotId?: string; serviceId?: string }>;
 }) {
-  const { voucherId } = await searchParams;
+  const { voucherId, slotId, serviceId } = await searchParams;
 
   const [rawServices, cancellationSetting, voucher] = await Promise.all([
     prisma.serviceType.findMany({
@@ -47,6 +47,8 @@ export default async function ReserverPage({
         serviceTypes={serviceTypes}
         cancellationDeadlineHours={cancellationDeadlineHours}
         giftVoucher={serializedVoucher}
+        preselectedServiceId={serviceId}
+        preselectedSlotId={slotId}
       />
     </div>
   );
