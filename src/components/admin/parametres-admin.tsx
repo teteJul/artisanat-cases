@@ -45,7 +45,7 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, string>>({});
-  const emptyPlan = { name: "", description: "", coursesPerCycle: "1", cycleType: "ANNUAL", totalCourses: "30", price: "" };
+  const emptyPlan = { name: "", description: "", cycleType: "ANNUAL", totalCourses: "30", price: "" };
   const [newPlan, setNewPlan] = useState(emptyPlan);
 
   async function addPlan() {
@@ -54,7 +54,7 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
     const res = await fetch("/api/admin/subscription-plans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...newPlan, price: parseFloat(newPlan.price), coursesPerCycle: parseInt(newPlan.coursesPerCycle), totalCourses: parseInt(newPlan.totalCourses) }),
+      body: JSON.stringify({ ...newPlan, price: parseFloat(newPlan.price), totalCourses: parseInt(newPlan.totalCourses) }),
     });
     const data = await res.json();
     if (res.ok) { setPlans([...plans, data]); setNewPlan(emptyPlan); }
@@ -65,7 +65,7 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
     const res = await fetch("/api/admin/subscription-plans", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...editData, price: parseFloat(editData.price ?? "0"), coursesPerCycle: parseInt(editData.coursesPerCycle ?? "1"), totalCourses: parseInt(editData.totalCourses ?? "30") }),
+      body: JSON.stringify({ id, ...editData, price: parseFloat(editData.price ?? "0"), totalCourses: parseInt(editData.totalCourses ?? "30") }),
     });
     const data = await res.json();
     if (res.ok) { setPlans(plans.map((p) => p.id === id ? { ...p, ...data } : p)); setEditId(null); }
@@ -81,16 +81,30 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
       <div className="bg-card border border-border rounded-xl p-5">
         <h3 className="font-medium text-foreground mb-4">Ajouter un plan d'abonnement</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <input type="text" placeholder="Nom du plan *" value={newPlan.name} onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-          <input type="text" placeholder="Description" value={newPlan.description} onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-          <input type="number" placeholder="Prix (€) *" value={newPlan.price} onChange={(e) => setNewPlan({ ...newPlan, price: e.target.value })} step="0.5" className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-          <input type="number" placeholder="Cours par cycle" value={newPlan.coursesPerCycle} onChange={(e) => setNewPlan({ ...newPlan, coursesPerCycle: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-          <input type="number" placeholder="Total cours / an" value={newPlan.totalCourses} onChange={(e) => setNewPlan({ ...newPlan, totalCourses: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-          <select value={newPlan.cycleType} onChange={(e) => setNewPlan({ ...newPlan, cycleType: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="ANNUAL">Annuel</option>
-            <option value="MONTHLY">Mensuel</option>
-            <option value="SEMESTER">Semestriel</option>
-          </select>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Nom du plan *</label>
+            <input type="text" placeholder="Ex : Abonnement annuel" value={newPlan.name} onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Description</label>
+            <input type="text" placeholder="Ex : 1 cours par semaine" value={newPlan.description} onChange={(e) => setNewPlan({ ...newPlan, description: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Prix (€) *</label>
+            <input type="number" placeholder="Ex : 200" value={newPlan.price} onChange={(e) => setNewPlan({ ...newPlan, price: e.target.value })} step="0.5" className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Total de cours inclus</label>
+            <input type="number" placeholder="Ex : 30" value={newPlan.totalCourses} onChange={(e) => setNewPlan({ ...newPlan, totalCourses: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Type de cycle</label>
+            <select value={newPlan.cycleType} onChange={(e) => setNewPlan({ ...newPlan, cycleType: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+              <option value="ANNUAL">Annuel</option>
+              <option value="MONTHLY">Mensuel</option>
+              <option value="SEMESTER">Semestriel</option>
+            </select>
+          </div>
         </div>
         <button onClick={addPlan} disabled={saving || !newPlan.name || !newPlan.price} className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Ajouter
@@ -143,7 +157,7 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
                         <button onClick={() => setEditId(null)} className="p-1.5 text-muted-foreground hover:bg-secondary rounded"><X className="w-4 h-4" /></button>
                       </>
                     ) : (
-                      <button onClick={() => { setEditId(p.id); setEditData({ name: p.name, cycleType: p.cycleType, totalCourses: String(p.totalCourses), coursesPerCycle: String(p.coursesPerCycle), price: String(p.price) }); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => { setEditId(p.id); setEditData({ name: p.name, cycleType: p.cycleType, totalCourses: String(p.totalCourses), price: String(p.price) }); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
                     )}
                   </div>
                 </td>

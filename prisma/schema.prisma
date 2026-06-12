@@ -208,7 +208,6 @@ model SubscriptionPlan {
   id              String   @id @default(cuid())
   name            String
   description     String?  @db.Text
-  coursesPerCycle Int
   cycleType       String
   totalCourses    Int
   price           Decimal  @db.Decimal(10, 2)
