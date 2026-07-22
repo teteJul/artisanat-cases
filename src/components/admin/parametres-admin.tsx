@@ -8,6 +8,7 @@ interface Service {
   id: string;
   name: string;
   type: string;
+  pricingType: string;
   price: number;
   durationMinutes: number;
   maxParticipants: number;
@@ -45,7 +46,7 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, string>>({});
-  const emptyPlan = { name: "", description: "", cycleType: "ANNUAL", totalCourses: "30", price: "" };
+  const emptyPlan = { name: "", description: "", cycleType: "annuel", totalCourses: "30", price: "" };
   const [newPlan, setNewPlan] = useState(emptyPlan);
 
   async function addPlan() {
@@ -100,9 +101,9 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Type de cycle</label>
             <select value={newPlan.cycleType} onChange={(e) => setNewPlan({ ...newPlan, cycleType: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-              <option value="ANNUAL">Annuel</option>
-              <option value="MONTHLY">Mensuel</option>
-              <option value="SEMESTER">Semestriel</option>
+              <option value="annuel">Annuel</option>
+              <option value="mensuel">Mensuel</option>
+              <option value="semestriel">Semestriel</option>
             </select>
           </div>
         </div>
@@ -132,9 +133,9 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
                 <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
                   {editId === p.id ? (
                     <select value={editData.cycleType ?? p.cycleType} onChange={(e) => setEditData({ ...editData, cycleType: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
-                      <option value="ANNUAL">Annuel</option>
-                      <option value="MONTHLY">Mensuel</option>
-                      <option value="SEMESTER">Semestriel</option>
+                      <option value="annuel">Annuel</option>
+                      <option value="mensuel">Mensuel</option>
+                      <option value="semestriel">Semestriel</option>
                     </select>
                   ) : p.cycleType}
                 </td>
@@ -181,7 +182,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
   const [saving, setSaving] = useState(false);
 
   // Formulaire nouveau service
-  const emptyService = { name: "", type: "COLLECTIVE_POTTERY", price: "", durationMinutes: "90", maxParticipants: "10", allowCarnet: false, allowMultiPerson: false };
+  const emptyService = { name: "", type: "COLLECTIVE_POTTERY", pricingType: "PER_PERSON", price: "", durationMinutes: "90", maxParticipants: "10", allowCarnet: false, allowMultiPerson: false };
   const [newService, setNewService] = useState(emptyService);
   const [editServiceId, setEditServiceId] = useState<string | null>(null);
   const [editService, setEditService] = useState<Record<string, string>>({});
@@ -246,6 +247,13 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                 </select>
               </div>
               <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Tarification *</label>
+                <select value={newService.pricingType} onChange={(e) => setNewService({ ...newService, pricingType: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="PER_PERSON">Collectif (par personne)</option>
+                  <option value="FIXED">Groupe / Personnel (forfait)</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-muted-foreground">Prix (€) *</label>
                 <input type="number" placeholder="Ex : 15" value={newService.price} onChange={(e) => setNewService({ ...newService, price: e.target.value })} step="0.5" className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
@@ -280,6 +288,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Service</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Type</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Tarification</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Prix</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Durée</th>
                   <th className="text-center px-4 py-3 font-medium text-muted-foreground">Actif</th>
@@ -301,6 +310,16 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                         SERVICE_TYPES.find((t) => t.value === s.type)?.label ?? s.type
                       )}
                     </td>
+                    <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">
+                      {editServiceId === s.id ? (
+                        <select value={editService.pricingType ?? s.pricingType} onChange={(e) => setEditService({ ...editService, pricingType: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
+                          <option value="PER_PERSON">Collectif (par pers.)</option>
+                          <option value="FIXED">Groupe / Personnel (forfait)</option>
+                        </select>
+                      ) : (
+                        s.pricingType === "FIXED" ? "Forfait" : "Par pers."
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold text-primary">
                       {editServiceId === s.id ? <input type="number" value={editService.price ?? String(s.price)} onChange={(e) => setEditService({ ...editService, price: e.target.value })} step="0.5" className="border border-input rounded px-2 py-1 text-sm bg-background w-20 text-right" /> : formatPrice(s.price)}
                     </td>
@@ -320,7 +339,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                             <button onClick={() => setEditServiceId(null)} className="p-1.5 text-muted-foreground hover:bg-secondary rounded"><X className="w-4 h-4" /></button>
                           </>
                         ) : (
-                          <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants) } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, type: s.type, pricingType: s.pricingType ?? "PER_PERSON", price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants) } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
                         )}
                       </div>
                     </td>

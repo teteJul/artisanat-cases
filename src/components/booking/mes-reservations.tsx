@@ -34,24 +34,47 @@ const PAYMENT_LABELS: Record<string, string> = {
   GIFT_VOUCHER: "Bon cadeau", CREDIT: "Avoir", ON_SITE: "Sur place",
 };
 
-function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 48 }: { booking: Booking; showCancel?: boolean; cancellationDeadlineHours?: number }) {
+function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 48, onCancelled }: { booking: Booking; showCancel?: boolean; cancellationDeadlineHours?: number; onCancelled?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [cancelStep, setCancelStep] = useState<"idle" | "confirm" | "done">("idle");
+  const [cancelStep, setCancelStep] = useState<"idle" | "confirm" | "done" | "error">("idle");
   const [cancelAction, setCancelAction] = useState<"credit" | "refund">("credit");
+  const [cancelError, setCancelError] = useState("");
 
   const canCancel = showCancel && canCancelBooking(booking.slot.startTime, cancellationDeadlineHours);
   const statusInfo = STATUS_LABELS[booking.status] ?? { label: booking.status, className: "bg-secondary" };
 
+  function getDoneMessage() {
+    if (!canCancel) return "Réservation annulée (hors délai — aucun remboursement).";
+    if (booking.paymentMethod === "CARNET") return "Réservation annulée — votre crédit carnet a été restitué.";
+    if (booking.paymentMethod === "SUBSCRIPTION") return "Réservation annulée — votre crédit abonnement a été restitué.";
+    if (booking.paymentMethod === "GIFT_VOUCHER") return "Réservation annulée — votre bon cadeau a été restitué.";
+    if (cancelAction === "refund") return "Réservation annulée — remboursement initié (3-5 jours ouvrés).";
+    return "Réservation annulée — un avoir a été crédité sur votre compte.";
+  }
+
   async function handleCancel() {
     setCancelling(true);
-    await fetch(`/api/bookings/${booking.id}/cancel`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: cancelAction }),
-    });
-    setCancelling(false);
-    setCancelStep("done");
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: cancelAction }),
+      });
+      if (res.ok) {
+        setCancelStep("done");
+        onCancelled?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setCancelError(data.error ?? "Une erreur est survenue.");
+        setCancelStep("error");
+      }
+    } catch {
+      setCancelError("Erreur réseau. Veuillez réessayer.");
+      setCancelStep("error");
+    } finally {
+      setCancelling(false);
+    }
   }
 
   return (
@@ -135,7 +158,12 @@ function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 
             <div className="border-t border-border pt-4">
               {cancelStep === "done" ? (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
-                  ✅ Réservation annulée. Un avoir a été crédité sur votre compte.
+                  ✅ {getDoneMessage()}
+                </div>
+              ) : cancelStep === "error" ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 flex items-center justify-between gap-3">
+                  <span>❌ {cancelError}</span>
+                  <button onClick={() => setCancelStep("idle")} className="underline text-xs shrink-0">Réessayer</button>
                 </div>
               ) : cancelStep === "confirm" ? (
                 <div className="space-y-3">
@@ -147,7 +175,7 @@ function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 
                   ) : (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <p className="text-sm text-amber-800 font-medium">⚠ Annulation tardive</p>
-                      <p className="text-xs text-amber-600 mt-0.5">Moins de {cancellationDeadlineHours}h avant le cours — le cours sera considéré comme utilisé, sans remboursement.</p>
+                      <p className="text-xs text-amber-600 mt-0.5">Moins de {cancellationDeadlineHours}h avant le cours — aucun remboursement ne sera effectué.</p>
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -178,13 +206,16 @@ function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 
 
 export function MesReservations({ upcoming, past, cancellationDeadlineHours = 48 }: { upcoming: Booking[]; past: Booking[]; cancellationDeadlineHours?: number }) {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
+
+  const visibleUpcoming = upcoming.filter((b) => !cancelledIds.has(b.id));
 
   return (
     <div className="space-y-5">
       {/* Tabs */}
       <div className="flex gap-1 bg-secondary/50 p-1 rounded-lg w-fit">
         <button onClick={() => setTab("upcoming")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === "upcoming" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          À venir ({upcoming.length})
+          À venir ({visibleUpcoming.length})
         </button>
         <button onClick={() => setTab("past")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === "past" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
           Historique ({past.length})
@@ -193,7 +224,7 @@ export function MesReservations({ upcoming, past, cancellationDeadlineHours = 48
 
       {tab === "upcoming" && (
         <div className="space-y-3">
-          {upcoming.length === 0 ? (
+          {visibleUpcoming.length === 0 ? (
             <div className="text-center py-12 bg-card border border-dashed border-border rounded-xl">
               <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground mb-4">Aucun cours à venir.</p>
@@ -203,7 +234,7 @@ export function MesReservations({ upcoming, past, cancellationDeadlineHours = 48
             </div>
           ) : (
             <>
-              {upcoming.map((b) => <BookingCard key={b.id} booking={b} showCancel cancellationDeadlineHours={cancellationDeadlineHours} />)}
+              {visibleUpcoming.map((b) => <BookingCard key={b.id} booking={b} showCancel cancellationDeadlineHours={cancellationDeadlineHours} onCancelled={() => setCancelledIds((prev) => new Set([...prev, b.id]))} />)}
               <div className="text-center pt-4">
                 <Link href="/reserver" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
                   Réserver un autre cours <ArrowRight className="w-4 h-4" />

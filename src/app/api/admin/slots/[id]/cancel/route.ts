@@ -21,7 +21,7 @@ export async function POST(
     include: {
       serviceType: true,
       bookings: {
-        where: { status: "CONFIRMED" },
+        where: { status: { in: ["CONFIRMED", "PENDING"] } },
         include: { user: true, participants: true },
       },
     },
@@ -58,9 +58,11 @@ export async function POST(
 
     // Rembourser carnet/abonnement
     if (booking.carnetId) {
+      const isFixed = slot.serviceType.pricingType === "FIXED";
+      const creditsToRestore = isFixed ? 1 : booking.participants.length;
       await prisma.carnet.update({
         where: { id: booking.carnetId },
-        data: { usedCredits: { decrement: booking.participants.length } },
+        data: { usedCredits: { decrement: creditsToRestore } },
       });
     }
     if (booking.subscriptionId) {
@@ -68,6 +70,13 @@ export async function POST(
         where: { id: booking.subscriptionId },
         data: { remainingCredits: { increment: 1 } },
       });
+    }
+    // Restituer le bon cadeau
+    if (booking.giftVoucherId) {
+      await prisma.giftVoucher.update({
+        where: { id: booking.giftVoucherId },
+        data: { status: "ACTIVE", redeemedAt: null },
+      }).catch(() => {});
     }
 
     // Email client

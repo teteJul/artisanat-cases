@@ -4,8 +4,18 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const serviceTypeId = searchParams.get("serviceTypeId");
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
+  const fromStr = searchParams.get("from");
+  const toStr = searchParams.get("to");
+
+  const fromDate = fromStr ? new Date(fromStr) : null;
+  const toDate = toStr ? new Date(toStr) : null;
+
+  if (fromDate && isNaN(fromDate.getTime())) {
+    return NextResponse.json({ error: "Paramètre 'from' invalide" }, { status: 400 });
+  }
+  if (toDate && isNaN(toDate.getTime())) {
+    return NextResponse.json({ error: "Paramètre 'to' invalide" }, { status: 400 });
+  }
 
   // Le planning est ouvert 2 mois à l'avance
   const now = new Date();
@@ -16,8 +26,8 @@ export async function GET(req: NextRequest) {
     where: {
       ...(serviceTypeId ? { serviceTypeId } : {}),
       startTime: {
-        gte: from ? new Date(from) : now,
-        lte: to ? new Date(to) : maxDate,
+        gte: fromDate ?? now,
+        lte: toDate ?? maxDate,
       },
       isActive: true,
       isCancelled: false,
@@ -43,7 +53,7 @@ export async function GET(req: NextRequest) {
   });
 
   const slotsWithAvailability = slots.map((slot) => {
-    const bookedCount = slot.bookings.length;
+    const bookedCount = slot.bookings.reduce((acc, b) => acc + b.participants.length, 0);
     const availableSpots = slot.maxParticipants - bookedCount;
     return {
       id: slot.id,

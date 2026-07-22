@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { BookingCalendar } from "@/components/booking/booking-calendar";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Réserver un cours",
@@ -13,8 +14,9 @@ export default async function ReserverPage({
   searchParams: Promise<{ voucherId?: string; slotId?: string; serviceId?: string }>;
 }) {
   const { voucherId, slotId, serviceId } = await searchParams;
+  const session = await auth();
 
-  const [rawServices, cancellationSetting, voucher] = await Promise.all([
+  const [rawServices, cancellationSetting, voucher, activeSubscriptions] = await Promise.all([
     prisma.serviceType.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -26,6 +28,17 @@ export default async function ReserverPage({
           select: { id: true, code: true, description: true, amountValue: true },
         })
       : null,
+    session?.user?.id
+      ? prisma.subscription.findMany({
+          where: {
+            userId: session.user.id,
+            status: "ACTIVE",
+            endDate: { gte: new Date() },
+            remainingCredits: { gt: 0 },
+          },
+          include: { plan: { select: { name: true, totalCourses: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   const serviceTypes = rawServices.map((s) => ({ ...s, price: Number(s.price) }));
@@ -33,6 +46,12 @@ export default async function ReserverPage({
   const serializedVoucher = voucher
     ? { ...voucher, amountValue: Number(voucher.amountValue) }
     : null;
+  const serializedSubscriptions = activeSubscriptions.map((s) => ({
+    id: s.id,
+    remainingCredits: s.remainingCredits,
+    endDate: s.endDate.toISOString(),
+    plan: s.plan,
+  }));
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -49,6 +68,7 @@ export default async function ReserverPage({
         giftVoucher={serializedVoucher}
         preselectedServiceId={serviceId}
         preselectedSlotId={slotId}
+        activeSubscriptions={serializedSubscriptions}
       />
     </div>
   );

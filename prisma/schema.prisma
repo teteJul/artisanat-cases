@@ -76,24 +76,26 @@ model VerificationToken {
 // ─── Services & Cours ────────────────────────────────────────────────────────
 
 model ServiceType {
-  id               String     @id @default(cuid())
+  id               String      @id @default(cuid())
   name             String
-  description      String?    @db.Text
+  description      String?     @db.Text
   shortDescription String?
   type             CourseType
+  pricingType      PricingType @default(PER_PERSON)
   durationMinutes  Int
-  price            Decimal    @db.Decimal(10, 2)
-  maxParticipants  Int        @default(10)
-  allowMultiPerson Boolean    @default(false)
-  allowCarnet      Boolean    @default(false)
-  isActive         Boolean    @default(true)
+  price            Decimal     @db.Decimal(10, 2)
+  maxParticipants  Int         @default(10)
+  allowMultiPerson Boolean     @default(false)
+  allowCarnet      Boolean     @default(false)
+  isActive         Boolean     @default(true)
   color            String?
   imageUrl         String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
-  slots   CourseSlot[]
-  carnets Carnet[]
+  slots        CourseSlot[]
+  carnets      Carnet[]
+  giftVouchers GiftVoucher[]
 
   @@map("service_types")
 }
@@ -137,6 +139,7 @@ model Booking {
   cancelledAt     DateTime?
   cancelReason    String?
   creditIssued    Boolean       @default(false)
+  reminderSentAt  DateTime?
   notes           String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -147,6 +150,7 @@ model Booking {
   subscription Subscription?        @relation(fields: [subscriptionId], references: [id])
   giftVoucher  GiftVoucher?         @relation(fields: [giftVoucherId], references: [id])
   participants BookingParticipant[]
+  credits      Credit[]
 
   @@map("bookings")
 }
@@ -223,9 +227,10 @@ model Subscription {
   id               String             @id @default(cuid())
   userId           String
   planId           String
-  status           SubscriptionStatus @default(ACTIVE)
+  status           SubscriptionStatus @default(PENDING)
   remainingCredits Int
   stripePaymentId  String?
+  stripeSessionId  String?
   startDate        DateTime
   endDate          DateTime
   createdAt        DateTime           @default(now())
@@ -247,6 +252,7 @@ model GiftVoucher {
   purchaserName   String?
   purchaserEmail  String?
   serviceTypeId   String?
+  serviceType     ServiceType?  @relation(fields: [serviceTypeId], references: [id])
   amountValue     Decimal?      @db.Decimal(10, 2)
   description     String?
   stripePaymentId  String?
@@ -275,6 +281,7 @@ model Credit {
   amount    Decimal  @db.Decimal(10, 2)
   reason    String
   bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
   usedAt    DateTime?
   createdAt DateTime @default(now())
 
@@ -358,6 +365,11 @@ enum Role {
   ADMIN
 }
 
+enum PricingType {
+  PER_PERSON
+  FIXED
+}
+
 enum CourseType {
   COLLECTIVE_POTTERY
   PRIVATE_POTTERY
@@ -393,12 +405,14 @@ enum PaymentStatus {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   EXPIRED
   CANCELLED
 }
 
 enum VoucherStatus {
+  PENDING
   ACTIVE
   REDEEMED
   EXPIRED

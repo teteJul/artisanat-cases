@@ -15,27 +15,27 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const periodStart = startOfMonth(subMonths(now, monthsBack - 1));
 
-  // CA total et par mois
+  // CA total et par mois — une seule requête sur toute la période
+  const allPaidBookings = await prisma.booking.findMany({
+    where: {
+      paymentStatus: "PAID",
+      slot: { startTime: { gte: periodStart, lte: endOfMonth(now) } },
+    },
+    select: { amountPaid: true, slot: { select: { startTime: true } } },
+  });
+
   const monthlyRevenue = [];
   for (let i = monthsBack - 1; i >= 0; i--) {
     const month = subMonths(now, i);
     const start = startOfMonth(month);
     const end = endOfMonth(month);
-
-    const bookings = await prisma.booking.findMany({
-      where: {
-        paymentStatus: "PAID",
-        createdAt: { gte: start, lte: end },
-      },
-      select: { amountPaid: true },
-    });
-
-    const revenue = bookings.reduce((sum, b) => sum + Number(b.amountPaid ?? 0), 0);
-
+    const monthBookings = allPaidBookings.filter(
+      (b) => b.slot.startTime >= start && b.slot.startTime <= end
+    );
     monthlyRevenue.push({
       month: month.toLocaleDateString("fr-FR", { month: "short", year: "numeric" }),
-      revenue,
-      bookingCount: bookings.length,
+      revenue: monthBookings.reduce((sum, b) => sum + Number(b.amountPaid ?? 0), 0),
+      bookingCount: monthBookings.length,
     });
   }
 
@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
             { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
           ],
         },
+        include: { participants: { select: { id: true } } },
       },
     },
   });
@@ -61,7 +62,8 @@ export async function GET(req: NextRequest) {
     if (!fillRateByService[key]) {
       fillRateByService[key] = { name: slot.serviceType.name, totalSlots: 0, avgFillRate: 0 };
     }
-    const rate = (slot.bookings.length / slot.maxParticipants) * 100;
+    const participantCount = slot.bookings.reduce((acc, b) => acc + b.participants.length, 0);
+    const rate = (participantCount / slot.maxParticipants) * 100;
     fillRateByService[key].totalSlots++;
     fillRateByService[key].avgFillRate += rate;
   }

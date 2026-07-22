@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const patchSchema = z.object({
+  notes: z.string().optional(),
+  isActive: z.boolean().optional(),
+  isCancelled: z.boolean().optional(),
+  cancelReason: z.string().optional(),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
+});
 
 export async function PATCH(
   req: NextRequest,
@@ -10,8 +20,10 @@ export async function PATCH(
   if (session?.user?.role !== "ADMIN") return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
   const { id } = await params;
-  const data = await req.json();
-  const slot = await prisma.courseSlot.update({ where: { id }, data });
+  const parsed = patchSchema.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const slot = await prisma.courseSlot.update({ where: { id }, data: parsed.data });
   return NextResponse.json(slot);
 }
 
@@ -25,14 +37,16 @@ export async function PUT(
   const { id } = await params;
   const { maxParticipants } = await req.json();
 
-  // Vérifier qu'on ne descend pas en dessous des réservations confirmées
-  const bookedCount = await prisma.booking.count({
+  // Compter les participants réels (pas les bookings) pour la vérification
+  const bookings = await prisma.booking.findMany({
     where: { courseSlotId: id, status: "CONFIRMED" },
+    include: { participants: { select: { id: true } } },
   });
+  const bookedParticipants = bookings.reduce((acc, b) => acc + b.participants.length, 0);
 
-  if (maxParticipants < bookedCount) {
+  if (maxParticipants < bookedParticipants) {
     return NextResponse.json(
-      { error: `Impossible : ${bookedCount} réservation(s) confirmée(s) sur ce créneau.` },
+      { error: `Impossible : ${bookedParticipants} participant(s) confirmé(s) sur ce créneau.` },
       { status: 400 }
     );
   }

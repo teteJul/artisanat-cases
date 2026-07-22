@@ -10,6 +10,7 @@ interface ServiceType {
   id: string;
   name: string;
   type: string;
+  pricingType: "PER_PERSON" | "FIXED";
   durationMinutes: number;
   price: number | string;
   maxParticipants: number;
@@ -37,15 +38,23 @@ interface GiftVoucher {
   amountValue: number;
 }
 
+interface ActiveSubscription {
+  id: string;
+  remainingCredits: number;
+  endDate: string;
+  plan: { name: string; totalCourses: number };
+}
+
 interface BookingCalendarProps {
   serviceTypes: ServiceType[];
   cancellationDeadlineHours?: number;
   giftVoucher?: GiftVoucher | null;
   preselectedServiceId?: string;
   preselectedSlotId?: string;
+  activeSubscriptions?: ActiveSubscription[];
 }
 
-export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, giftVoucher, preselectedServiceId, preselectedSlotId }: BookingCalendarProps) {
+export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, giftVoucher, preselectedServiceId, preselectedSlotId, activeSubscriptions = [] }: BookingCalendarProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const [selectedService, setSelectedService] = useState<string | null>(preselectedServiceId ?? null);
@@ -59,10 +68,13 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
   };
   const [participants, setParticipants] = useState([defaultParticipant]);
   const [paymentMethod, setPaymentMethod] = useState<"STRIPE" | "CARNET" | "SUBSCRIPTION" | "GIFT_VOUCHER">(
-    giftVoucher ? "GIFT_VOUCHER" : "STRIPE"
+    giftVoucher ? "GIFT_VOUCHER" : activeSubscriptions.length > 0 ? "SUBSCRIPTION" : "STRIPE"
+  );
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string>(
+    activeSubscriptions[0]?.id ?? ""
   );
   const [booking, setBooking] = useState(false);
-  const [step, setStep] = useState<"service" | "slot" | "participants" | "payment">("service");
+  const [bookingError, setBookingError] = useState("");
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
   const [waitlistError, setWaitlistError] = useState("");
 
@@ -77,6 +89,11 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
 
   useEffect(() => {
     if (!selectedService) return;
+    // Si on change vers un service non collectif et que le mode était SUBSCRIPTION, revenir à STRIPE
+    const svc = serviceTypes.find((s) => s.id === selectedService);
+    if (svc?.type !== "COLLECTIVE_POTTERY" && paymentMethod === "SUBSCRIPTION") {
+      setPaymentMethod("STRIPE");
+    }
     setLoading(true);
     fetch(`/api/slots?serviceTypeId=${selectedService}`)
       .then((r) => r.json())
@@ -110,7 +127,8 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
     if (!selectedSlot) return;
 
     setBooking(true);
-    const participantsToSend = selectedServiceType?.allowMultiPerson
+    setBookingError("");
+    const participantsToSend = selectedServiceType?.allowMultiPerson && paymentMethod !== "SUBSCRIPTION"
       ? participants.filter((p) => p.firstName && p.lastName)
       : [{
           firstName: session.user.name?.split(" ")[0] ?? "Client",
@@ -126,11 +144,14 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
         paymentMethod,
         participants: participantsToSend,
         giftVoucherId: paymentMethod === "GIFT_VOUCHER" && giftVoucher ? giftVoucher.id : undefined,
+        subscriptionId: paymentMethod === "SUBSCRIPTION" ? selectedSubscriptionId : undefined,
       }),
     });
 
     const data = await res.json();
-    if (data.checkoutUrl) {
+    if (!res.ok) {
+      setBookingError(data.error ?? "Une erreur est survenue. Veuillez réessayer.");
+    } else if (data.checkoutUrl) {
       window.location.href = data.checkoutUrl;
     } else if (data.bookingId) {
       router.push(`/mon-espace/reservations?success=true&bookingId=${data.bookingId}`);
@@ -176,7 +197,7 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
             {serviceTypes.map((service) => (
               <button
                 key={service.id}
-                onClick={() => { setSelectedService(service.id); setSelectedSlot(null); setStep("slot"); }}
+                onClick={() => { setSelectedService(service.id); setSelectedSlot(null); }}
                 className={`text-left border rounded-xl p-4 transition-all ${
                   selectedService === service.id
                     ? "border-primary bg-primary/5 ring-1 ring-primary"
@@ -184,7 +205,12 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
                 }`}
               >
                 <p className="font-medium text-foreground text-sm">{service.name}</p>
-                <p className="text-primary font-semibold text-sm mt-1">{formatPrice(Number(service.price))}</p>
+                <p className="text-primary font-semibold text-sm mt-1">
+                  {formatPrice(Number(service.price))}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">
+                    {service.pricingType === "PER_PERSON" ? "/ pers." : "forfait"}
+                  </span>
+                </p>
                 <p className="text-muted-foreground text-xs mt-1">{service.durationMinutes} min · max {service.maxParticipants} pers.</p>
               </button>
             ))}
@@ -214,7 +240,7 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
                       {daySlots.map((slot) => (
                         <button
                           key={slot.id}
-                          onClick={() => { setSelectedSlot(slot); setStep("participants"); }}
+                          onClick={() => { setSelectedSlot(slot); }}
                           className={`border rounded-lg p-3 text-left transition-all ${
                             selectedSlot?.id === slot.id
                               ? "border-primary bg-primary/5 ring-1 ring-primary"
@@ -255,7 +281,7 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
         )}
 
         {/* Étape 3 : Participants */}
-        {selectedSlot && !selectedSlot.isFull && selectedServiceType?.allowMultiPerson && (
+        {selectedSlot && !selectedSlot.isFull && selectedServiceType?.allowMultiPerson && paymentMethod !== "SUBSCRIPTION" && (
           <div ref={(el) => { if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }}>
             <h2 className="font-semibold text-foreground mb-3 flex items-center gap-2">
               <span className="w-6 h-6 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center font-bold">3</span>
@@ -326,35 +352,49 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
                   <p className="font-medium text-foreground text-sm">{participants.length}</p>
                 </div>
                 <div className="pt-3 border-t border-border">
-                  {giftVoucher && paymentMethod === "GIFT_VOUCHER" ? (() => {
-                    const fullPrice = Number(selectedSlot.serviceType.price) * participants.length;
-                    const remaining = Math.max(0, fullPrice - giftVoucher.amountValue);
+                  {(() => {
+                    const isFixed = selectedSlot.serviceType.pricingType === "FIXED";
+                    const unitP = Number(selectedSlot.serviceType.price);
+                    const total = isFixed ? unitP : unitP * participants.length;
+
+                    if (paymentMethod === "SUBSCRIPTION") {
+                      return (
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total</p>
+                          <p className="text-xl font-bold text-green-600">Inclus dans l'abonnement</p>
+                        </div>
+                      );
+                    }
+                    if (giftVoucher && paymentMethod === "GIFT_VOUCHER") {
+                      const remaining = Math.max(0, total - giftVoucher.amountValue);
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Prix{!isFixed && participants.length > 1 ? ` (×${participants.length})` : ""}</span>
+                            <span>{formatPrice(total)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-green-700">
+                            <span>Bon cadeau</span>
+                            <span>- {formatPrice(Math.min(giftVoucher.amountValue, total))}</span>
+                          </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-border">
+                            <p className="text-xs text-muted-foreground font-medium">Reste à payer</p>
+                            <p className={`text-xl font-bold ${remaining === 0 ? "text-green-600" : "text-primary"}`}>
+                              {formatPrice(remaining)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Prix</span>
-                          <span>{formatPrice(fullPrice)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-green-700">
-                          <span>Bon cadeau</span>
-                          <span>- {formatPrice(Math.min(giftVoucher.amountValue, fullPrice))}</span>
-                        </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-border">
-                          <p className="text-xs text-muted-foreground font-medium">Reste à payer</p>
-                          <p className={`text-xl font-bold ${remaining === 0 ? "text-green-600" : "text-primary"}`}>
-                            {formatPrice(remaining)}
-                          </p>
-                        </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          Total{!isFixed && participants.length > 1 ? ` (×${participants.length})` : ""}
+                        </p>
+                        <p className="text-xl font-bold text-primary">{formatPrice(total)}</p>
                       </div>
                     );
-                  })() : (
-                    <>
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="text-xl font-bold text-primary">
-                        {formatPrice(Number(selectedSlot.serviceType.price) * participants.length)}
-                      </p>
-                    </>
-                  )}
+                  })()}
                 </div>
               </div>
 
@@ -362,6 +402,35 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                   <p className="text-xs text-green-800 font-medium">🎁 Bon cadeau appliqué</p>
                   <p className="text-xs text-green-700 mt-0.5">{giftVoucher.code} — {formatPrice(giftVoucher.amountValue)}</p>
+                </div>
+              )}
+
+              {/* Sélecteur mode de paiement (si abonnement dispo, pas de bon cadeau, et cours collectif) */}
+              {!giftVoucher && activeSubscriptions.length > 0 && selectedServiceType?.type === "COLLECTIVE_POTTERY" && (
+                <div className="mb-4">
+                  <p className="text-xs text-muted-foreground mb-2">Mode de paiement</p>
+                  <div className="space-y-2">
+                    {activeSubscriptions.map((sub) => (
+                      <label key={sub.id} className={`flex items-start gap-2 p-2.5 border rounded-lg cursor-pointer transition-colors ${paymentMethod === "SUBSCRIPTION" && selectedSubscriptionId === sub.id ? "border-primary bg-primary/5" : "border-border"}`}>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={sub.id}
+                          checked={paymentMethod === "SUBSCRIPTION" && selectedSubscriptionId === sub.id}
+                          onChange={() => { setPaymentMethod("SUBSCRIPTION"); setSelectedSubscriptionId(sub.id); setParticipants([participants[0]]); }}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <p className="text-xs font-medium text-foreground">{sub.plan.name}</p>
+                          <p className="text-xs text-muted-foreground">{sub.remainingCredits} cours restants · exp. {new Date(sub.endDate).toLocaleDateString("fr-FR")}</p>
+                        </div>
+                      </label>
+                    ))}
+                    <label className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer transition-colors ${paymentMethod === "STRIPE" ? "border-primary bg-primary/5" : "border-border"}`}>
+                      <input type="radio" name="paymentMethod" value="STRIPE" checked={paymentMethod === "STRIPE"} onChange={() => setPaymentMethod("STRIPE")} className="mt-0.5" />
+                      <p className="text-xs font-medium text-foreground">Payer par carte</p>
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -397,18 +466,31 @@ export function BookingCalendar({ serviceTypes, cancellationDeadlineHours = 48, 
                   )}
                 </div>
               ) : (
+                <>
+                {bookingError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 mb-3">
+                    ❌ {bookingError}
+                  </div>
+                )}
                 <button
                   onClick={handleBooking}
                   disabled={booking || (selectedServiceType?.allowMultiPerson && (!participants[0].firstName || !participants[0].lastName))}
                   className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {booking ? "Confirmation..." : giftVoucher && paymentMethod === "GIFT_VOUCHER"
-                    ? Math.max(0, Number(selectedSlot.serviceType.price) * participants.length - giftVoucher.amountValue) === 0
-                      ? "Confirmer avec mon bon cadeau"
-                      : `Payer ${formatPrice(Math.max(0, Number(selectedSlot.serviceType.price) * participants.length - giftVoucher.amountValue))} et réserver`
-                    : "Payer et réserver"}
+                  {(() => {
+                    if (booking) return "Confirmation...";
+                    if (paymentMethod === "SUBSCRIPTION") return "Réserver avec mon abonnement";
+                    const isFixed = selectedSlot.serviceType.pricingType === "FIXED";
+                    const total = isFixed ? Number(selectedSlot.serviceType.price) : Number(selectedSlot.serviceType.price) * participants.length;
+                    if (giftVoucher && paymentMethod === "GIFT_VOUCHER") {
+                      const remaining = Math.max(0, total - giftVoucher.amountValue);
+                      return remaining === 0 ? "Confirmer avec mon bon cadeau" : `Payer ${formatPrice(remaining)} et réserver`;
+                    }
+                    return `Payer ${formatPrice(total)} et réserver`;
+                  })()}
                   <ChevronRight className="w-4 h-4" />
                 </button>
+                </>
               )}
 
               {!session && (

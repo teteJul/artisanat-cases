@@ -6,7 +6,6 @@ import { z } from "zod";
 const planSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  coursesPerCycle: z.number().int().min(1),
   cycleType: z.string().min(1),
   totalCourses: z.number().int().min(1),
   price: z.number().min(0),

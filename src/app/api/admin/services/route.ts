@@ -13,6 +13,7 @@ const serviceSchema = z.object({
   description: z.string().optional(),
   shortDescription: z.string().optional(),
   type: z.enum(["COLLECTIVE_POTTERY","PRIVATE_POTTERY","PRIVATE_GROUP_POTTERY","PAINTING","BIRTHDAY","COURS"]),
+  pricingType: z.enum(["PER_PERSON", "FIXED"]).default("PER_PERSON"),
   durationMinutes: z.number().int().positive(),
   price: z.number().positive(),
   maxParticipants: z.number().int().positive().default(10),
@@ -24,6 +25,7 @@ const serviceSchema = z.object({
 });
 
 export async function GET() {
+  if (!(await checkAdmin())) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   const services = await prisma.serviceType.findMany({ orderBy: { name: "asc" } });
   return NextResponse.json(services);
 }
@@ -38,10 +40,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(service);
 }
 
+const updateServiceSchema = serviceSchema.partial().extend({ id: z.string() });
+
 export async function PUT(req: NextRequest) {
   if (!(await checkAdmin())) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { id, ...data } = await req.json();
+  const parsed = updateServiceSchema.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const { id, ...data } = parsed.data;
   const service = await prisma.serviceType.update({ where: { id }, data });
   return NextResponse.json(service);
 }

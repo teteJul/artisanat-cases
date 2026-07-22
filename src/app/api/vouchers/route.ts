@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 
 const purchaseSchema = z.object({
   serviceTypeId: z.string(),
@@ -19,29 +20,37 @@ export async function POST(req: NextRequest) {
 
   const { serviceTypeId, purchaserName, purchaserEmail, recipientEmail } = parsed.data;
 
-  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId } });
-  if (!serviceType) return NextResponse.json({ error: "Service introuvable" }, { status: 404 });
+  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId, isActive: true } });
+  if (!serviceType) return NextResponse.json({ error: "Service introuvable ou inactif" }, { status: 404 });
 
-  const code = generateVoucherCode();
   const expiresAt = new Date();
-  expiresAt.setFullYear(expiresAt.getFullYear() + 1); // valable 1 an
+  expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-  const voucher = await prisma.giftVoucher.create({
-    data: {
-      code,
-      serviceTypeId,
-      purchaserName,
-      purchaserEmail,
-      recipientEmail: recipientEmail || null,
-      description: `Bon cadeau — ${serviceType.name}`,
-      status: "ACTIVE",
-      expiresAt,
-      amountValue: serviceType.price,
-    },
-  });
+  // Retry sur collision de code unique (P2002)
+  let voucher;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      voucher = await prisma.giftVoucher.create({
+        data: {
+          code: generateVoucherCode(),
+          serviceTypeId,
+          purchaserName,
+          purchaserEmail,
+          recipientEmail: recipientEmail || null,
+          description: `Bon cadeau — ${serviceType.name}`,
+          status: "PENDING",
+          expiresAt,
+          amountValue: serviceType.price,
+        },
+      });
+      break;
+    } catch (e: unknown) {
+      if ((e as { code?: string })?.code !== "P2002" || attempt === 4) throw e;
+    }
+  }
+  if (!voucher) return NextResponse.json({ error: "Erreur lors de la création du bon cadeau" }, { status: 500 });
 
-  // Créer session Stripe pour le paiement
-  const session = await stripe.checkout.sessions.create({
+  const stripeSession = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: [
       {
@@ -58,17 +67,18 @@ export async function POST(req: NextRequest) {
     ],
     mode: "payment",
     customer_email: purchaserEmail,
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/bon-cadeau/confirmation?code=${code}`,
+    // Utiliser l'ID (pas le code) dans l'URL — le code reste côté serveur
+    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/bon-cadeau/confirmation?voucherId=${voucher.id}`,
     cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/bon-cadeau?cancelled=true`,
     metadata: { voucherId: voucher.id, recipientEmail: recipientEmail ?? "" },
   });
 
   await prisma.giftVoucher.update({
     where: { id: voucher.id },
-    data: { stripeSessionId: session.id },
+    data: { stripeSessionId: stripeSession.id },
   });
 
-  return NextResponse.json({ checkoutUrl: session.url, voucherId: voucher.id });
+  return NextResponse.json({ checkoutUrl: stripeSession.url, voucherId: voucher.id });
 }
 
 // Réclamer un bon cadeau sur son compte
@@ -91,11 +101,10 @@ export async function PUT(req: NextRequest) {
     data: { ownerId: session.user.id },
   });
 
-
   return NextResponse.json({ success: true, voucher });
 }
 
 function generateVoucherCode(): string {
-  return Math.random().toString(36).substring(2, 6).toUpperCase() +
-    "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+  const part = () => randomBytes(3).toString("hex").toUpperCase().substring(0, 4);
+  return `${part()}-${part()}`;
 }

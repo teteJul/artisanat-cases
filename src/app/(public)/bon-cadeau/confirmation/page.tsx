@@ -11,12 +11,14 @@ export const metadata: Metadata = { title: "Bon cadeau confirmé" };
 export default async function BonCadeauConfirmationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ voucherId?: string; code?: string }>;
 }) {
-  const { code } = await searchParams;
+  const { voucherId, code } = await searchParams;
 
-  // Valider que le bon cadeau existe
-  const voucher = code
+  // Support ancien lien ?code=... et nouveau lien ?voucherId=...
+  const voucher = voucherId
+    ? await prisma.giftVoucher.findUnique({ where: { id: voucherId } })
+    : code
     ? await prisma.giftVoucher.findUnique({ where: { code } })
     : null;
 
@@ -24,46 +26,36 @@ export default async function BonCadeauConfirmationPage({
     return (
       <div className="max-w-lg mx-auto px-4 py-24 text-center">
         <p className="text-destructive font-medium mb-4">Bon cadeau introuvable.</p>
-        <Link href="/bon-cadeau" className="text-primary hover:underline text-sm">
-          Acheter un bon cadeau
-        </Link>
+        <Link href="/bon-cadeau" className="text-primary hover:underline text-sm">Acheter un bon cadeau</Link>
       </div>
     );
   }
 
-  // Envoyer l'email si pas encore fait
-  if (!voucher.emailSentAt && voucher.purchaserEmail) {
+  // Si encore PENDING, vérifier le paiement Stripe avant d'afficher une erreur
+  if (voucher.status === "PENDING" && voucher.stripeSessionId) {
     try {
-      let paymentConfirmed = false;
-
-      if (voucher.stripeSessionId) {
-        const stripeSession = await stripe.checkout.sessions.retrieve(voucher.stripeSessionId);
-        paymentConfirmed = stripeSession.payment_status === "paid";
-        if (paymentConfirmed && !voucher.stripePaymentId) {
-          await prisma.giftVoucher.update({
-            where: { code: voucher.code },
-            data: { stripePaymentId: stripeSession.payment_intent as string },
-          });
-        }
-      }
-
-      if (paymentConfirmed) {
-        await prisma.giftVoucher.update({
-          where: { code: voucher.code },
-          data: { emailSentAt: new Date() },
-        });
-
+      const stripeSession = await stripe.checkout.sessions.retrieve(voucher.stripeSessionId);
+      if (stripeSession.payment_status === "paid") {
         const serviceName = voucher.description?.replace("Bon cadeau — ", "") ?? "cours";
-        const expiresAt = voucher.expiresAt
+        const expiresStr = voucher.expiresAt
           ? voucher.expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
           : "1 an après l'achat";
 
-        const recipients = [voucher.purchaserEmail];
+        await prisma.giftVoucher.update({
+          where: { id: voucher.id },
+          data: {
+            status: "ACTIVE",
+            stripePaymentId: stripeSession.payment_intent as string,
+            emailSentAt: new Date(),
+          },
+        });
+
+        const recipients = [voucher.purchaserEmail!].filter(Boolean);
         if (voucher.recipientEmail && voucher.recipientEmail !== voucher.purchaserEmail) {
           recipients.push(voucher.recipientEmail);
         }
 
-        await resend.emails.send({
+        resend.emails.send({
           from: EMAIL_FROM,
           to: recipients,
           subject: `Votre bon cadeau Artisanat Cases — Code : ${voucher.code}`,
@@ -71,11 +63,57 @@ export default async function BonCadeauConfirmationPage({
             purchaserName: voucher.purchaserName ?? "Client",
             serviceName,
             code: voucher.code,
-            expiresAt,
+            expiresAt: expiresStr,
             appUrl: process.env.NEXT_PUBLIC_APP_URL!,
           }),
-        });
+        }).catch((e) => console.error("[bon-cadeau confirmation] Email échoué:", e));
+
+        // Continuer avec le rendu succès (voucher est maintenant ACTIVE)
+      } else {
+        return (
+          <div className="max-w-lg mx-auto px-4 py-24 text-center">
+            <p className="text-destructive font-medium mb-4">
+              Le paiement n'a pas encore été confirmé. Vérifiez votre email de confirmation Stripe.
+            </p>
+            <Link href="/bon-cadeau" className="text-primary hover:underline text-sm">Acheter un bon cadeau</Link>
+          </div>
+        );
       }
+    } catch (e) {
+      console.error("[bon-cadeau confirmation] Stripe check échoué:", e);
+      return (
+        <div className="max-w-lg mx-auto px-4 py-24 text-center">
+          <p className="text-destructive font-medium mb-4">Impossible de vérifier le paiement. Veuillez réessayer.</p>
+          <Link href="/bon-cadeau" className="text-primary hover:underline text-sm">Retour</Link>
+        </div>
+      );
+    }
+  }
+
+  // Envoyer l'email si webhook l'a activé mais n'a pas envoyé l'email
+  if (voucher.status === "ACTIVE" && !voucher.emailSentAt && voucher.purchaserEmail) {
+    try {
+      const serviceName = voucher.description?.replace("Bon cadeau — ", "") ?? "cours";
+      const expiresStr = voucher.expiresAt
+        ? voucher.expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+        : "1 an après l'achat";
+      const recipients = [voucher.purchaserEmail];
+      if (voucher.recipientEmail && voucher.recipientEmail !== voucher.purchaserEmail) {
+        recipients.push(voucher.recipientEmail);
+      }
+      await prisma.giftVoucher.update({ where: { id: voucher.id }, data: { emailSentAt: new Date() } });
+      resend.emails.send({
+        from: EMAIL_FROM,
+        to: recipients,
+        subject: `Votre bon cadeau Artisanat Cases — Code : ${voucher.code}`,
+        react: VoucherConfirmationEmail({
+          purchaserName: voucher.purchaserName ?? "Client",
+          serviceName,
+          code: voucher.code,
+          expiresAt: expiresStr,
+          appUrl: process.env.NEXT_PUBLIC_APP_URL!,
+        }),
+      }).catch((e) => console.error("[bon-cadeau confirmation] Email échoué:", e));
     } catch (e) {
       console.error("[bon-cadeau confirmation] Erreur email:", e);
     }

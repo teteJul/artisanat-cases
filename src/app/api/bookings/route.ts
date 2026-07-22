@@ -4,16 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { resend, EMAIL_FROM } from "@/lib/resend";
 import BookingConfirmationEmail from "@/../emails/booking-confirmation";
+import SubscriptionLowCreditsEmail from "@/../emails/subscription-low-credits";
 import { z } from "zod";
-import { canCancelBooking } from "@/lib/utils";
 
 const createBookingSchema = z.object({
   courseSlotId: z.string(),
   paymentMethod: z.enum(["STRIPE", "CARNET", "SUBSCRIPTION", "GIFT_VOUCHER", "CREDIT"]),
   participants: z.array(z.object({
-    firstName: z.string(),
-    lastName: z.string(),
-    email: z.string().email().optional(),
+    firstName: z.string().min(1, "Prénom requis"),
+    lastName: z.string().min(1, "Nom requis"),
+    email: z.string().email().optional().or(z.literal("")),
     phone: z.string().optional(),
     age: z.number().optional(),
   })).min(1),
@@ -37,171 +37,270 @@ export async function POST(req: NextRequest) {
 
   const { courseSlotId, paymentMethod, participants, carnetId, subscriptionId, giftVoucherId, notes } = parsed.data;
 
-  // Vérifier le créneau
-  const slot = await prisma.courseSlot.findUnique({
+  // Pré-validation hors transaction : vérifications légères qui ne nécessitent pas d'atomicité
+  const slotCheck = await prisma.courseSlot.findUnique({
     where: { id: courseSlotId },
-    include: {
-      serviceType: true,
-      bookings: {
-        where: {
-          OR: [
-            { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
-            { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
-          ],
-        },
-      },
-    },
+    include: { serviceType: true },
   });
 
-  if (!slot || !slot.isActive || slot.isCancelled) {
+  if (!slotCheck || !slotCheck.isActive || slotCheck.isCancelled) {
     return NextResponse.json({ error: "Créneau non disponible" }, { status: 400 });
   }
-
-  // Vérifier le planning ouvert à 2 mois maximum
+  if (slotCheck.startTime <= new Date()) {
+    return NextResponse.json({ error: "Ce créneau est déjà passé" }, { status: 400 });
+  }
   const twoMonthsFromNow = new Date();
   twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-  if (slot.startTime > twoMonthsFromNow) {
+  if (slotCheck.startTime > twoMonthsFromNow) {
     return NextResponse.json({ error: "Ce créneau n'est pas encore ouvert à la réservation" }, { status: 400 });
   }
 
-  // Compter les places restantes
-  const bookedCount = slot.bookings.reduce((acc, b) => {
-    // compter les participants de chaque booking
-    return acc + 1;
-  }, 0);
-
-  const participantCount = participants.length;
-
-  if (bookedCount + participantCount > slot.maxParticipants) {
-    // Proposer la liste d'attente
-    return NextResponse.json(
-      { error: "Plus assez de places disponibles", canWaitlist: true },
-      { status: 409 }
-    );
-  }
-
-  const serviceType = slot.serviceType;
+  const serviceType = slotCheck.serviceType;
   const unitPrice = Number(serviceType.price);
+  const isFixed = serviceType.pricingType === "FIXED";
+  const participantCount = participants.length;
+  const fullPrice = isFixed ? unitPrice : unitPrice * participantCount;
 
-  // Calculer le prix total
-  let totalAmount = 0;
-
-  if (paymentMethod === "CARNET") {
-    if (!carnetId) return NextResponse.json({ error: "Carnet requis" }, { status: 400 });
-    const carnet = await prisma.carnet.findFirst({
-      where: { id: carnetId, userId: session.user.id, isActive: true },
-    });
-    if (!carnet || carnet.usedCredits + participantCount > carnet.totalCredits) {
-      return NextResponse.json({ error: "Carnet insuffisant" }, { status: 400 });
-    }
-    // Déduire les crédits
-    await prisma.carnet.update({
-      where: { id: carnetId },
-      data: { usedCredits: { increment: participantCount } },
-    });
-    totalAmount = 0;
-  } else if (paymentMethod === "SUBSCRIPTION") {
-    if (!subscriptionId) return NextResponse.json({ error: "Abonnement requis" }, { status: 400 });
-    const subscription = await prisma.subscription.findFirst({
-      where: { id: subscriptionId, userId: session.user.id, status: "ACTIVE" },
-    });
-    if (!subscription || subscription.remainingCredits < 1) {
-      return NextResponse.json({ error: "Abonnement insuffisant" }, { status: 400 });
-    }
-    await prisma.subscription.update({
-      where: { id: subscriptionId },
-      data: { remainingCredits: { decrement: 1 } },
-    });
-    // Participants supplémentaires payés à l'unité
-    totalAmount = unitPrice * (participantCount - 1);
-  } else if (paymentMethod === "GIFT_VOUCHER") {
-    if (!giftVoucherId) return NextResponse.json({ error: "Bon cadeau requis" }, { status: 400 });
-    const voucher = await prisma.giftVoucher.findFirst({
-      where: { id: giftVoucherId, status: "ACTIVE" },
-    });
-    if (!voucher) return NextResponse.json({ error: "Bon cadeau invalide ou déjà utilisé" }, { status: 400 });
-    const voucherValue = Number(voucher.amountValue ?? 0);
-    const fullPrice = unitPrice * participantCount;
-    totalAmount = Math.max(0, fullPrice - voucherValue);
-  } else if (paymentMethod === "STRIPE") {
-    totalAmount = unitPrice * participantCount;
+  // Vérification abonnement uniquement pour cours collectifs
+  if (paymentMethod === "SUBSCRIPTION" && serviceType.type !== "COLLECTIVE_POTTERY") {
+    return NextResponse.json({ error: "Les abonnements sont réservés aux cours collectifs uniquement" }, { status: 400 });
   }
 
-  const needsStripePayment = totalAmount > 0;
+  // Vérification carnet autorisé sur ce service
+  if (paymentMethod === "CARNET" && !serviceType.allowCarnet) {
+    return NextResponse.json({ error: "Les carnets ne sont pas acceptés pour ce type de cours" }, { status: 400 });
+  }
 
-  // Créer la réservation en base
-  const booking = await prisma.booking.create({
-    data: {
+  // Vérification pas de double réservation sur le même créneau
+  const existingBooking = await prisma.booking.findFirst({
+    where: {
       userId: session.user.id,
       courseSlotId,
-      status: needsStripePayment ? "PENDING" : "CONFIRMED",
-      paymentMethod,
-      paymentStatus: needsStripePayment ? "PENDING" : "PAID",
-      amountPaid: totalAmount,
-      carnetId,
-      subscriptionId,
-      giftVoucherId,
-      notes,
-      participants: {
-        create: participants.map((p, i) => ({ ...p, isMainBooker: i === 0 })),
-      },
+      status: { in: ["CONFIRMED", "PENDING"] },
     },
   });
-
-  // Bon cadeau gratuit (0€) → marquer comme utilisé immédiatement
-  if (paymentMethod === "GIFT_VOUCHER" && giftVoucherId && !needsStripePayment) {
-    await prisma.giftVoucher.update({
-      where: { id: giftVoucherId },
-      data: { status: "REDEEMED", redeemedAt: new Date() },
-    });
+  if (existingBooking) {
+    return NextResponse.json({ error: "Vous avez déjà une réservation sur ce créneau" }, { status: 409 });
   }
 
-  // Si paiement Stripe nécessaire (STRIPE ou GIFT_VOUCHER partiel), créer une session
-  if (needsStripePayment) {
+  // ─── Transaction atomique : vérif places + débits + création booking ────────
+  let booking: Awaited<ReturnType<typeof prisma.booking.create>>;
+  let totalAmount = 0;
+  let lowCreditsSubId: string | null = null;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Re-fetch du slot avec lock implicite dans la transaction
+      const slot = await tx.courseSlot.findUnique({
+        where: { id: courseSlotId },
+        include: {
+          bookings: {
+            where: {
+              OR: [
+                { status: { notIn: ["CANCELLED_BY_CLIENT", "CANCELLED_BY_ADMIN", "PENDING"] } },
+                { status: "PENDING", createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
+              ],
+            },
+            include: { participants: { select: { id: true } } },
+          },
+        },
+      });
+
+      if (!slot) throw new Error("SLOT_UNAVAILABLE");
+
+      // Compter les vrais participants réservés (pas le nombre de bookings)
+      const bookedCount = slot.bookings.reduce((acc, b) => acc + b.participants.length, 0);
+      if (bookedCount + participantCount > slot.maxParticipants) {
+        throw new Error("NO_SPOTS");
+      }
+
+      // ── Débit selon mode de paiement ──────────────────────────────────────
+      let txAmount = 0;
+
+      if (paymentMethod === "CARNET") {
+        if (!carnetId) throw new Error("CARNET_REQUIRED");
+        const carnet = await tx.carnet.findFirst({
+          where: { id: carnetId, userId: session.user.id, isActive: true },
+        });
+        const creditsNeeded = isFixed ? 1 : participantCount;
+        if (!carnet) throw new Error("CARNET_NOT_FOUND");
+        if (carnet.expiresAt < new Date()) throw new Error("CARNET_EXPIRED");
+        if (carnet.usedCredits + creditsNeeded > carnet.totalCredits) throw new Error("CARNET_INSUFFICIENT");
+        await tx.carnet.update({
+          where: { id: carnetId },
+          data: { usedCredits: { increment: creditsNeeded } },
+        });
+
+      } else if (paymentMethod === "SUBSCRIPTION") {
+        if (!subscriptionId) throw new Error("SUBSCRIPTION_REQUIRED");
+        const sub = await tx.subscription.findFirst({
+          where: { id: subscriptionId, userId: session.user.id, status: "ACTIVE", endDate: { gte: new Date() } },
+        });
+        if (!sub) throw new Error("SUBSCRIPTION_INVALID");
+        if (sub.remainingCredits < 1) throw new Error("SUBSCRIPTION_NO_CREDITS");
+        const updated = await tx.subscription.update({
+          where: { id: subscriptionId },
+          data: { remainingCredits: { decrement: 1 } },
+        });
+        if (updated.remainingCredits === 1) lowCreditsSubId = subscriptionId;
+        txAmount = isFixed ? 0 : unitPrice * (participantCount - 1);
+
+      } else if (paymentMethod === "CREDIT") {
+        const userCredits = await tx.credit.findMany({
+          where: { userId: session.user.id, usedAt: null },
+          orderBy: { createdAt: "asc" },
+        });
+        const totalCredits = userCredits.reduce((sum, c) => sum + Number(c.amount), 0);
+        if (totalCredits < fullPrice) throw new Error(`CREDIT_INSUFFICIENT:${totalCredits.toFixed(2)}`);
+        let remaining = fullPrice;
+        for (const credit of userCredits) {
+          if (remaining <= 0) break;
+          const creditAmount = Number(credit.amount);
+          if (creditAmount > remaining) {
+            // Consommation partielle : marquer l'ancien crédit utilisé et créer le reliquat
+            await tx.credit.update({ where: { id: credit.id }, data: { usedAt: new Date() } });
+            await tx.credit.create({
+              data: {
+                userId: session.user.id,
+                amount: creditAmount - remaining,
+                reason: "credit_partial_remainder",
+              },
+            });
+            remaining = 0;
+          } else {
+            await tx.credit.update({ where: { id: credit.id }, data: { usedAt: new Date() } });
+            remaining -= creditAmount;
+          }
+        }
+
+      } else if (paymentMethod === "GIFT_VOUCHER") {
+        if (!giftVoucherId) throw new Error("VOUCHER_REQUIRED");
+        const voucher = await tx.giftVoucher.findFirst({
+          where: {
+            id: giftVoucherId,
+            status: "ACTIVE",
+            OR: [{ ownerId: null }, { ownerId: session.user.id }],
+          },
+        });
+        if (!voucher) throw new Error("VOUCHER_INVALID");
+        if (voucher.expiresAt && voucher.expiresAt < new Date()) throw new Error("VOUCHER_EXPIRED");
+        txAmount = Math.max(0, fullPrice - Number(voucher.amountValue ?? 0));
+
+      } else if (paymentMethod === "STRIPE") {
+        txAmount = fullPrice;
+      }
+
+      totalAmount = txAmount;
+
+      // ── Création du booking ───────────────────────────────────────────────
+      const newBooking = await tx.booking.create({
+        data: {
+          userId: session.user.id,
+          courseSlotId,
+          status: totalAmount > 0 ? "PENDING" : "CONFIRMED",
+          paymentMethod,
+          paymentStatus: totalAmount > 0 ? "PENDING" : "PAID",
+          amountPaid: totalAmount,
+          carnetId,
+          subscriptionId,
+          giftVoucherId,
+          notes,
+          participants: {
+            create: participants.map((p, i) => ({ ...p, isMainBooker: i === 0 })),
+          },
+        },
+      });
+
+      // Bon cadeau gratuit (0€) → marquer utilisé dans la transaction
+      if (paymentMethod === "GIFT_VOUCHER" && giftVoucherId && totalAmount === 0) {
+        await tx.giftVoucher.update({
+          where: { id: giftVoucherId },
+          data: { status: "REDEEMED", redeemedAt: new Date() },
+        });
+      }
+
+      return newBooking;
+    });
+
+    booking = result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "";
+    if (msg === "NO_SPOTS") return NextResponse.json({ error: "Plus assez de places disponibles", canWaitlist: true }, { status: 409 });
+    if (msg === "SLOT_UNAVAILABLE") return NextResponse.json({ error: "Créneau non disponible" }, { status: 400 });
+    if (msg === "CARNET_REQUIRED") return NextResponse.json({ error: "Carnet requis" }, { status: 400 });
+    if (msg === "CARNET_NOT_FOUND") return NextResponse.json({ error: "Carnet introuvable" }, { status: 400 });
+    if (msg === "CARNET_EXPIRED") return NextResponse.json({ error: "Ce carnet est expiré" }, { status: 400 });
+    if (msg === "CARNET_INSUFFICIENT") return NextResponse.json({ error: "Carnet insuffisant" }, { status: 400 });
+    if (msg === "SUBSCRIPTION_REQUIRED") return NextResponse.json({ error: "Abonnement requis" }, { status: 400 });
+    if (msg === "SUBSCRIPTION_INVALID") return NextResponse.json({ error: "Abonnement inactif ou expiré" }, { status: 400 });
+    if (msg === "SUBSCRIPTION_NO_CREDITS") return NextResponse.json({ error: "Plus de crédits sur cet abonnement" }, { status: 400 });
+    if (msg.startsWith("CREDIT_INSUFFICIENT:")) {
+      const avail = msg.split(":")[1];
+      return NextResponse.json({ error: `Crédits insuffisants (disponible : ${avail} €)` }, { status: 400 });
+    }
+    if (msg === "VOUCHER_REQUIRED") return NextResponse.json({ error: "Bon cadeau requis" }, { status: 400 });
+    if (msg === "VOUCHER_INVALID") return NextResponse.json({ error: "Bon cadeau invalide ou déjà utilisé" }, { status: 400 });
+    if (msg === "VOUCHER_EXPIRED") return NextResponse.json({ error: "Ce bon cadeau est expiré" }, { status: 400 });
+    console.error("[bookings] Transaction échouée:", err);
+    return NextResponse.json({ error: "Erreur lors de la réservation" }, { status: 500 });
+  }
+
+  // ─── Hors transaction : appels externes ────────────────────────────────────
+
+  // Email alerte crédits faibles abonnement
+  if (lowCreditsSubId) {
+    const subData = await prisma.subscription.findUnique({
+      where: { id: lowCreditsSubId },
+      include: { plan: true, user: true },
+    });
+    if (subData) {
+      resend.emails.send({
+        from: EMAIL_FROM,
+        to: subData.user.email,
+        subject: `Plus qu'un cours restant sur votre abonnement ${subData.plan.name}`,
+        react: SubscriptionLowCreditsEmail({
+          clientName: subData.user.firstName ?? subData.user.name ?? "Client",
+          planName: subData.plan.name,
+          remainingCredits: 1,
+          endDate: subData.endDate.toLocaleDateString("fr-FR"),
+          appUrl: process.env.NEXT_PUBLIC_APP_URL!,
+        }),
+      }).catch((e) => console.error("[booking] Low credits email échoué:", e));
+    }
+  }
+
+  // Paiement Stripe nécessaire
+  if (totalAmount > 0) {
     const stripeSession = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "eur",
-            product_data: {
-              name: serviceType.name,
-              description: `${participants.length} participant(s) — ${new Date(slot.startTime).toLocaleDateString("fr-FR")}`,
-            },
-            unit_amount: Math.round(totalAmount * 100),
+      line_items: [{
+        price_data: {
+          currency: "eur",
+          product_data: {
+            name: serviceType.name,
+            description: `${participantCount} participant(s) — ${new Date(slotCheck.startTime).toLocaleDateString("fr-FR")}`,
           },
-          quantity: 1,
+          unit_amount: Math.round(totalAmount * 100),
         },
-      ],
+        quantity: 1,
+      }],
       mode: "payment",
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/mon-espace/reservations?success=true&bookingId=${booking.id}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/reserver?cancelled=true`,
-      metadata: {
-        bookingId: booking.id,
-        giftVoucherId: giftVoucherId ?? "",
-      },
+      metadata: { bookingId: booking.id, giftVoucherId: giftVoucherId ?? "" },
     });
-
-    await prisma.booking.update({
-      where: { id: booking.id },
-      data: { stripeSessionId: stripeSession.id },
-    });
-
+    await prisma.booking.update({ where: { id: booking.id }, data: { stripeSessionId: stripeSession.id } });
     return NextResponse.json({ checkoutUrl: stripeSession.url, bookingId: booking.id });
   }
 
-  // Réservation confirmée sans paiement → envoyer email de confirmation
+  // Réservation confirmée → email
   const fullBooking = await prisma.booking.findUnique({
     where: { id: booking.id },
-    include: {
-      user: true,
-      slot: { include: { serviceType: true } },
-      participants: true,
-    },
+    include: { user: true, slot: { include: { serviceType: true } }, participants: true },
   });
-
   if (fullBooking) {
     const slotDate = new Date(fullBooking.slot.startTime);
+    const payLabel = paymentMethod === "GIFT_VOUCHER" ? "Bon cadeau" : paymentMethod === "CARNET" ? "Carnet" : paymentMethod === "CREDIT" ? "Avoir" : "Abonnement";
     resend.emails.send({
       from: EMAIL_FROM,
       to: fullBooking.user.email,
@@ -213,7 +312,7 @@ export async function POST(req: NextRequest) {
         time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
         bookingId: fullBooking.id,
         participants: fullBooking.participants,
-        paymentMethod: paymentMethod === "GIFT_VOUCHER" ? "Bon cadeau" : paymentMethod === "CARNET" ? "Carnet" : "Abonnement",
+        paymentMethod: payLabel,
         totalPaid: `${Number(fullBooking.amountPaid).toFixed(2)} €`,
         appUrl: process.env.NEXT_PUBLIC_APP_URL!,
       }),
@@ -231,10 +330,7 @@ export async function GET(req: NextRequest) {
 
   const bookings = await prisma.booking.findMany({
     where: { userId: session.user.id },
-    include: {
-      slot: { include: { serviceType: true } },
-      participants: true,
-    },
+    include: { slot: { include: { serviceType: true } }, participants: true },
     orderBy: { createdAt: "desc" },
   });
 

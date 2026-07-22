@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   ChevronRight,
+  BadgeCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/admin/cours", label: "Cours & créneaux", icon: CalendarDays },
   { href: "/admin/reservations", label: "Réservations", icon: BookOpen },
   { href: "/admin/clients", label: "Clients", icon: Users },
+  { href: "/admin/abonnements", label: "Abonnements", icon: BadgeCheck },
   { href: "/admin/bons-cadeaux", label: "Bons cadeaux", icon: Gift },
   { href: "/admin/catalogue", label: "Catalogue", icon: Package },
   { href: "/admin/galerie", label: "Galerie", icon: ImageIcon },

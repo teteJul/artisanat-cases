@@ -20,7 +20,7 @@ export async function POST(
 
   const booking = await prisma.booking.findFirst({
     where: { id, userId: session.user.id },
-    include: { slot: { include: { serviceType: true } }, participants: true, user: true },
+    include: { slot: { include: { serviceType: true } }, participants: true, user: true, giftVoucher: true },
   });
 
   if (!booking) return NextResponse.json({ error: "Réservation introuvable" }, { status: 404 });
@@ -28,7 +28,9 @@ export async function POST(
     return NextResponse.json({ error: "Déjà annulée" }, { status: 400 });
   }
 
-  const canCancel = canCancelBooking(booking.slot.startTime);
+  const deadlineSetting = await prisma.appSetting.findUnique({ where: { key: "cancellation_deadline_hours" } });
+  const deadlineHours = deadlineSetting ? parseInt(deadlineSetting.value) : 48;
+  const canCancel = canCancelBooking(booking.slot.startTime, deadlineHours);
 
   await prisma.booking.update({
     where: { id },
@@ -39,28 +41,35 @@ export async function POST(
     },
   });
 
-  // Rembourser ou créditer seulement si annulation > 48h
-  if (canCancel && Number(booking.amountPaid) > 0) {
-    if (action === "refund" && booking.stripePaymentId) {
-      await stripe.refunds.create({ payment_intent: booking.stripePaymentId });
-      await prisma.booking.update({ where: { id }, data: { paymentStatus: "REFUNDED" } });
-    } else if (action === "credit") {
-      await prisma.credit.create({
-        data: {
-          userId: session.user.id,
-          amount: booking.amountPaid!,
-          reason: "cancellation_refund",
-          bookingId: id,
-        },
-      });
-      await prisma.booking.update({ where: { id }, data: { creditIssued: true } });
+  if (canCancel) {
+    // Remboursement/avoir seulement si un paiement a eu lieu
+    if (Number(booking.amountPaid) > 0) {
+      if (action === "refund" && booking.stripePaymentId) {
+        await stripe.refunds.create({ payment_intent: booking.stripePaymentId });
+        await prisma.booking.update({ where: { id }, data: { paymentStatus: "REFUNDED" } });
+      } else if (action === "credit") {
+        const creditAmount = Number(booking.amountPaid ?? 0);
+        if (creditAmount > 0) {
+          await prisma.credit.create({
+            data: {
+              userId: session.user.id,
+              amount: creditAmount,
+              reason: "cancellation_refund",
+              bookingId: id,
+            },
+          });
+        }
+        await prisma.booking.update({ where: { id }, data: { creditIssued: true } });
+      }
     }
 
-    // Remettre le crédit carnet/abonnement
+    // Restituer le crédit carnet/abonnement (amountPaid === 0 pour ces méthodes)
     if (booking.carnetId) {
+      const isFixed = booking.slot.serviceType.pricingType === "FIXED";
+      const creditsToRestore = isFixed ? 1 : booking.participants.length;
       await prisma.carnet.update({
         where: { id: booking.carnetId },
-        data: { usedCredits: { decrement: booking.participants.length } },
+        data: { usedCredits: { decrement: creditsToRestore } },
       });
     }
     if (booking.subscriptionId) {
@@ -68,6 +77,13 @@ export async function POST(
         where: { id: booking.subscriptionId },
         data: { remainingCredits: { increment: 1 } },
       });
+    }
+    // Remettre le bon cadeau en ACTIVE
+    if (booking.giftVoucherId) {
+      await prisma.giftVoucher.update({
+        where: { id: booking.giftVoucherId },
+        data: { status: "ACTIVE", redeemedAt: null },
+      }).catch(() => {});
     }
   }
 
@@ -88,7 +104,7 @@ export async function POST(
           ? `<p>Un crédit de ${Number(booking.amountPaid).toFixed(2)} € a été ajouté à votre compte.</p>`
           : ""
         : !canCancel && Number(booking.amountPaid) > 0
-        ? "<p>Cette annulation étant tardive (moins de 48h avant le cours), aucun remboursement ne sera effectué.</p>"
+        ? `<p>Cette annulation étant tardive (moins de ${deadlineHours}h avant le cours), aucun remboursement ne sera effectué.</p>`
         : ""
       }
       <p style="color:#9a6b50;font-size:13px;">— L'équipe Artisanat Cases</p>
@@ -102,25 +118,24 @@ export async function POST(
     orderBy: { createdAt: "asc" },
   });
 
-  if (waitlist.length > 0) {
+  // Notifier uniquement le premier de la liste (évite d'envoyer à tout le monde pour 1 place)
+  const nextOnWaitlist = waitlist[0];
+  if (nextOnWaitlist) {
     const slotDate = new Date(booking.slot.startTime);
     const bookingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reserver?slotId=${booking.courseSlotId}&serviceId=${booking.slot.serviceType.id ?? ""}`;
-
-    for (const entry of waitlist) {
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: entry.user.email,
-        subject: `Une place s'est libérée — ${booking.slot.serviceType.name}`,
-        react: WaitlistNotificationEmail({
-          clientName: entry.user.firstName ?? entry.user.name ?? "Client",
-          serviceName: booking.slot.serviceType.name,
-          date: slotDate.toLocaleDateString("fr-FR"),
-          time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
-          bookingUrl,
-        }),
-      });
-      await prisma.waitlist.update({ where: { id: entry.id }, data: { notifiedAt: new Date() } });
-    }
+    await resend.emails.send({
+      from: EMAIL_FROM,
+      to: nextOnWaitlist.user.email,
+      subject: `Une place s'est libérée — ${booking.slot.serviceType.name}`,
+      react: WaitlistNotificationEmail({
+        clientName: nextOnWaitlist.user.firstName ?? nextOnWaitlist.user.name ?? "Client",
+        serviceName: booking.slot.serviceType.name,
+        date: slotDate.toLocaleDateString("fr-FR"),
+        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        bookingUrl,
+      }),
+    }).catch((e) => console.error("[cancel] Email waitlist échoué:", e));
+    await prisma.waitlist.update({ where: { id: nextOnWaitlist.id }, data: { notifiedAt: new Date() } });
   }
 
   return NextResponse.json({ success: true, refundEligible: canCancel });

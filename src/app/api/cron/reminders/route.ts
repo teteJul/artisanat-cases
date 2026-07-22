@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resend, EMAIL_FROM } from "@/lib/resend";
 import BookingReminderEmail from "@/../emails/booking-reminder";
-
-// Cette route est appelée via un cron job (configurer sur Hostinger ou via un service externe)
-// Ex: curl https://artisanatcases.fr/api/cron/reminders?secret=XXX chaque jour à 8h
+import { parisOffsetMinutes } from "@/lib/subscriptions";
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
@@ -12,19 +10,29 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
+  // Fenêtre "demain" en heure de Paris (UTC+1 hiver / UTC+2 été)
+  // parisOffsetMinutes() utilise les règles DST européennes, indépendant du fuseau du serveur
   const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const parisOffset = parisOffsetMinutes(now);
+  const parisNow = new Date(now.getTime() + parisOffset * 60 * 1000);
 
-  const start = new Date(tomorrow);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(tomorrow);
-  end.setHours(23, 59, 59, 999);
+  const tomorrowParis = new Date(parisNow);
+  tomorrowParis.setUTCDate(tomorrowParis.getUTCDate() + 1);
 
+  const y = tomorrowParis.getUTCFullYear();
+  const m = tomorrowParis.getUTCMonth();
+  const d = tomorrowParis.getUTCDate();
+
+  // Bornes en UTC correspondant à 00:00–23:59 heure de Paris demain
+  const startUTC = new Date(Date.UTC(y, m, d, 0, 0, 0) - parisOffset * 60 * 1000);
+  const endUTC = new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - parisOffset * 60 * 1000);
+
+  // Seulement les bookings CONFIRMED sans reminder déjà envoyé
   const bookings = await prisma.booking.findMany({
     where: {
       status: "CONFIRMED",
-      slot: { startTime: { gte: start, lte: end } },
+      reminderSentAt: null,
+      slot: { startTime: { gte: startUTC, lte: endUTC } },
     },
     include: {
       user: true,
@@ -48,9 +56,13 @@ export async function GET(req: NextRequest) {
           appUrl: process.env.NEXT_PUBLIC_APP_URL!,
         }),
       });
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { reminderSentAt: new Date() },
+      });
       sent++;
-    } catch {
-      // On continue même si un email échoue
+    } catch (e) {
+      console.error(`[cron/reminders] Email échoué pour booking ${booking.id}:`, e);
     }
   }
 
