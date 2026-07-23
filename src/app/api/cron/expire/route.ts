@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const pendingCutoff = new Date(now.getTime() - 2 * 60 * 60 * 1000); // PENDING > 2h
 
-  const [expiredSubs, stalePendingSubs, expiredCarnets, expiredVouchers] = await Promise.all([
+  const [expiredSubs, stalePendingSubs, stalePendingBookings, expiredCarnets, expiredVouchers] = await Promise.all([
     // Abonnements actifs dont la date de fin est dépassée
     prisma.subscription.updateMany({
       where: { status: "ACTIVE", endDate: { lt: now } },
@@ -25,6 +25,11 @@ export async function GET(req: NextRequest) {
     prisma.subscription.updateMany({
       where: { status: "PENDING", createdAt: { lt: pendingCutoff } },
       data: { status: "CANCELLED" },
+    }),
+    // Réservations PENDING abandonnées (checkout Stripe non finalisé depuis + de 2h)
+    prisma.booking.updateMany({
+      where: { status: "PENDING", createdAt: { lt: pendingCutoff } },
+      data: { status: "CANCELLED_BY_CLIENT" },
     }),
     // Carnets encore actifs dont la date d'expiration est dépassée
     prisma.carnet.updateMany({
@@ -38,11 +43,12 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  console.log(`[cron/expire] Abonnements expirés: ${expiredSubs.count}, PENDING supprimés: ${stalePendingSubs.count}, Carnets: ${expiredCarnets.count}, Bons cadeaux: ${expiredVouchers.count}`);
+  console.log(`[cron/expire] Abonnements expirés: ${expiredSubs.count}, PENDING sub annulés: ${stalePendingSubs.count}, PENDING bookings annulés: ${stalePendingBookings.count}, Carnets: ${expiredCarnets.count}, Bons cadeaux: ${expiredVouchers.count}`);
 
   return NextResponse.json({
     expiredSubscriptions: expiredSubs.count,
-    deletedPendingSubscriptions: stalePendingSubs.count,
+    cancelledPendingSubscriptions: stalePendingSubs.count,
+    cancelledPendingBookings: stalePendingBookings.count,
     expiredCarnets: expiredCarnets.count,
     expiredVouchers: expiredVouchers.count,
   });

@@ -54,8 +54,8 @@ export default async function MesCarnetPage({
               clientName: sub.user.firstName ?? sub.user.name ?? "Client",
               planName: sub.plan.name,
               totalCourses: sub.plan.totalCourses,
-              startDate: sub.startDate.toLocaleDateString("fr-FR"),
-              endDate: sub.endDate.toLocaleDateString("fr-FR"),
+              startDate: startDate.toLocaleDateString("fr-FR"),
+              endDate: endDate.toLocaleDateString("fr-FR"),
               price: `${Number(sub.plan.price).toFixed(2)} €`,
               appUrl: process.env.NEXT_PUBLIC_APP_URL!,
             }),
@@ -260,6 +260,7 @@ export default async function MesCarnetPage({
                     <td className="px-4 py-3 text-foreground">
                       {credit.reason === "cancellation_refund" ? "Remboursement annulation" :
                        credit.reason === "admin_slot_cancellation" ? "Cours annulé par l'atelier" :
+                       credit.reason === "credit_partial_remainder" ? "Reliquat après paiement partiel" :
                        credit.reason}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{formatDate(credit.createdAt)}</td>

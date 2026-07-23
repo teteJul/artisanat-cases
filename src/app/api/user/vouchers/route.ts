@@ -6,8 +6,16 @@ export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } });
+
   const vouchers = await prisma.giftVoucher.findMany({
-    where: { ownerId: session.user.id },
+    where: {
+      OR: [
+        { ownerId: session.user.id },
+        // Bons achetés par cet utilisateur mais pas encore réclamés (ownerId null)
+        { purchaserEmail: user?.email, ownerId: null, status: { not: "PENDING" } },
+      ],
+    },
     orderBy: { createdAt: "desc" },
   });
 

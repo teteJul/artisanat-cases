@@ -22,9 +22,20 @@ export async function PUT(req: NextRequest) {
   const { firstName, lastName, phone, currentPassword, newPassword } = parsed.data;
 
   const updateData: Record<string, string> = {};
-  if (firstName) { updateData.firstName = firstName; updateData.name = `${firstName} ${lastName ?? ""}`; }
-  if (lastName) { updateData.lastName = lastName; }
+  if (firstName) updateData.firstName = firstName;
+  if (lastName) updateData.lastName = lastName;
   if (phone !== undefined) updateData.phone = phone;
+
+  // Reconstruire name à partir des nouvelles valeurs + valeurs actuelles en DB
+  if (firstName || lastName) {
+    const current = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { firstName: true, lastName: true },
+    });
+    const newFirst = firstName ?? current?.firstName ?? "";
+    const newLast = lastName ?? current?.lastName ?? "";
+    updateData.name = `${newFirst} ${newLast}`.trim();
+  }
 
   // Changement de mot de passe
   if (newPassword && currentPassword) {

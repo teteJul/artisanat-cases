@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = createBookingSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Données de réservation invalides. Vérifiez les champs participant(s)." }, { status: 400 });
   }
 
   const { courseSlotId, paymentMethod, participants, carnetId, subscriptionId, giftVoucherId, notes } = parsed.data;
@@ -61,9 +61,12 @@ export async function POST(req: NextRequest) {
   const participantCount = participants.length;
   const fullPrice = isFixed ? unitPrice : unitPrice * participantCount;
 
-  // Vérification abonnement uniquement pour cours collectifs
+  // Vérification abonnement uniquement pour cours collectifs, 1 participant max
   if (paymentMethod === "SUBSCRIPTION" && serviceType.type !== "COLLECTIVE_POTTERY") {
     return NextResponse.json({ error: "Les abonnements sont réservés aux cours collectifs uniquement" }, { status: 400 });
+  }
+  if (paymentMethod === "SUBSCRIPTION" && participantCount > 1) {
+    return NextResponse.json({ error: "Les abonnements ne couvrent qu'une seule place par cours" }, { status: 400 });
   }
 
   // Vérification carnet autorisé sur ce service
@@ -107,6 +110,12 @@ export async function POST(req: NextRequest) {
       });
 
       if (!slot) throw new Error("SLOT_UNAVAILABLE");
+
+      // Vérification anti-doublon à l'intérieur de la transaction (protection race condition)
+      const duplicate = await tx.booking.findFirst({
+        where: { userId: session.user.id, courseSlotId, status: { in: ["CONFIRMED", "PENDING"] } },
+      });
+      if (duplicate) throw new Error("ALREADY_BOOKED");
 
       // Compter les vrais participants réservés (pas le nombre de bookings)
       const bookedCount = slot.bookings.reduce((acc, b) => acc + b.participants.length, 0);
@@ -226,6 +235,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "";
     if (msg === "NO_SPOTS") return NextResponse.json({ error: "Plus assez de places disponibles", canWaitlist: true }, { status: 409 });
+    if (msg === "ALREADY_BOOKED") return NextResponse.json({ error: "Vous avez déjà une réservation sur ce créneau" }, { status: 409 });
     if (msg === "SLOT_UNAVAILABLE") return NextResponse.json({ error: "Créneau non disponible" }, { status: 400 });
     if (msg === "CARNET_REQUIRED") return NextResponse.json({ error: "Carnet requis" }, { status: 400 });
     if (msg === "CARNET_NOT_FOUND") return NextResponse.json({ error: "Carnet introuvable" }, { status: 400 });

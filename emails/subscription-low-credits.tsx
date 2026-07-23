@@ -20,7 +20,7 @@ export default function SubscriptionLowCreditsEmail({
   return (
     <Html lang="fr">
       <Head />
-      <Preview>Plus que {remainingCredits} cours restant sur votre abonnement {planName}</Preview>
+      <Preview>{`Plus que ${remainingCredits} cours restant sur votre abonnement ${planName}`}</Preview>
       <Body style={main}>
         <Container style={container}>
           <Section style={header}>

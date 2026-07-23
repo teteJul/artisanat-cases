@@ -96,12 +96,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Ce bon cadeau est expiré" }, { status: 400 });
   }
 
-  await prisma.giftVoucher.update({
+  const updated = await prisma.giftVoucher.update({
     where: { code },
     data: { ownerId: session.user.id },
   });
 
-  return NextResponse.json({ success: true, voucher });
+  return NextResponse.json({ success: true, voucher: updated });
 }
 
 function generateVoucherCode(): string {

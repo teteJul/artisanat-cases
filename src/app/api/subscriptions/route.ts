@@ -14,23 +14,24 @@ export async function POST(req: NextRequest) {
   }
 
   const parsed = schema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Identifiant de formule invalide" }, { status: 400 });
 
   const plan = await prisma.subscriptionPlan.findUnique({
     where: { id: parsed.data.planId, isActive: true },
   });
   if (!plan) return NextResponse.json({ error: "Formule introuvable" }, { status: 404 });
 
-  // Vérifier qu'il n'a pas déjà un abonnement ACTIVE sur ce plan
+  // Vérifier qu'il n'a pas déjà un abonnement ACTIVE ou PENDING sur ce plan
   const existing = await prisma.subscription.findFirst({
-    where: { userId: session.user.id, planId: plan.id, status: "ACTIVE" },
+    where: { userId: session.user.id, planId: plan.id, status: { in: ["ACTIVE", "PENDING"] } },
   });
   if (existing) {
     return NextResponse.json({ error: "Vous avez déjà un abonnement actif sur cette formule" }, { status: 409 });
   }
 
-  const startDate = new Date();
-  const endDate = computeEndDate(startDate, plan.cycleType);
+  // Dates provisoires — seront recalculées au moment du paiement (webhook / page carnets)
+  const provisionalStart = new Date();
+  const provisionalEnd = computeEndDate(provisionalStart, plan.cycleType);
 
   // Créer la subscription PENDING
   const subscription = await prisma.subscription.create({
@@ -39,8 +40,8 @@ export async function POST(req: NextRequest) {
       planId: plan.id,
       status: "PENDING",
       remainingCredits: plan.totalCourses,
-      startDate,
-      endDate,
+      startDate: provisionalStart,
+      endDate: provisionalEnd,
     },
   });
 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
           currency: "eur",
           product_data: {
             name: plan.name,
-            description: `${plan.totalCourses} cours — valable jusqu'au ${endDate.toLocaleDateString("fr-FR")}`,
+            description: `${plan.totalCourses} cours — valable jusqu'au ${provisionalEnd.toLocaleDateString("fr-FR")}`,
           },
           unit_amount: Math.round(Number(plan.price) * 100),
         },

@@ -14,11 +14,9 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
 
-  await prisma.verificationToken.upsert({
-    where: { identifier_token: { identifier: email, token: "reset" } },
-    update: { token, expires },
-    create: { identifier: email, token, expires },
-  });
+  // Supprimer les anciens tokens pour cet email avant d'en créer un nouveau
+  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
+  await prisma.verificationToken.create({ data: { identifier: email, token, expires } });
 
   const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reinitialiser-mot-de-passe?token=${token}&email=${encodeURIComponent(email)}`;
 

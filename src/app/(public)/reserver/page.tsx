@@ -16,7 +16,7 @@ export default async function ReserverPage({
   const { voucherId, slotId, serviceId } = await searchParams;
   const session = await auth();
 
-  const [rawServices, cancellationSetting, voucher, activeSubscriptions] = await Promise.all([
+  const [rawServices, cancellationSetting, voucher, activeSubscriptions, activeCarnets, userCredits] = await Promise.all([
     prisma.serviceType.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -39,6 +39,15 @@ export default async function ReserverPage({
           include: { plan: { select: { name: true, totalCourses: true } } },
         })
       : Promise.resolve([]),
+    session?.user?.id
+      ? prisma.carnet.findMany({
+          where: { userId: session.user.id, isActive: true, expiresAt: { gte: new Date() } },
+          select: { id: true, serviceTypeId: true, totalCredits: true, usedCredits: true, expiresAt: true },
+        })
+      : Promise.resolve([]),
+    session?.user?.id
+      ? prisma.credit.findMany({ where: { userId: session.user.id, usedAt: null } })
+      : Promise.resolve([]),
   ]);
 
   const serviceTypes = rawServices.map((s) => ({ ...s, price: Number(s.price) }));
@@ -52,6 +61,14 @@ export default async function ReserverPage({
     endDate: s.endDate.toISOString(),
     plan: s.plan,
   }));
+  const serializedCarnets = activeCarnets.map((c) => ({
+    id: c.id,
+    serviceTypeId: c.serviceTypeId,
+    totalCredits: c.totalCredits,
+    usedCredits: c.usedCredits,
+    expiresAt: c.expiresAt.toISOString(),
+  }));
+  const totalCredit = userCredits.reduce((sum, c) => sum + Number(c.amount), 0);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -69,6 +86,8 @@ export default async function ReserverPage({
         preselectedServiceId={serviceId}
         preselectedSlotId={slotId}
         activeSubscriptions={serializedSubscriptions}
+        activeCarnets={serializedCarnets}
+        totalCredit={totalCredit}
       />
     </div>
   );

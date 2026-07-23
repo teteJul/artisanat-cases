@@ -10,25 +10,38 @@ export async function POST(req: NextRequest) {
   }
 
   const { courseSlotId } = await req.json();
+  if (!courseSlotId) return NextResponse.json({ error: "Créneau requis" }, { status: 400 });
+
+  // Vérifier que le créneau existe et est valide
+  const slot = await prisma.courseSlot.findUnique({
+    where: { id: courseSlotId },
+    include: { serviceType: true },
+  });
+  if (!slot || slot.isCancelled || !slot.isActive) {
+    return NextResponse.json({ error: "Créneau introuvable ou annulé" }, { status: 404 });
+  }
+
+  // Vérifier qu'il n'a pas déjà une réservation confirmée
+  const existingBooking = await prisma.booking.findFirst({
+    where: { userId: session.user.id, courseSlotId, status: { in: ["CONFIRMED", "PENDING"] } },
+  });
+  if (existingBooking) {
+    return NextResponse.json({ error: "Vous avez déjà une réservation sur ce créneau" }, { status: 409 });
+  }
 
   const existing = await prisma.waitlist.findUnique({
     where: { userId_courseSlotId: { userId: session.user.id, courseSlotId } },
   });
-
   if (existing) {
     return NextResponse.json({ error: "Vous êtes déjà en liste d'attente" }, { status: 409 });
   }
 
-  const [entry, slot, user] = await Promise.all([
+  const [entry, user] = await Promise.all([
     prisma.waitlist.create({ data: { userId: session.user.id, courseSlotId } }),
-    prisma.courseSlot.findUnique({
-      where: { id: courseSlotId },
-      include: { serviceType: true },
-    }),
     prisma.user.findUnique({ where: { id: session.user.id } }),
   ]);
 
-  if (slot && user) {
+  if (user) {
     const slotDate = new Date(slot.startTime);
     resend.emails.send({
       from: EMAIL_FROM,

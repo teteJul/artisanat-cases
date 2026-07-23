@@ -15,7 +15,7 @@ const registerSchema = z.object({
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = registerSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Informations invalides. Vérifiez les champs (prénom et nom : 2 caractères min, mot de passe : 8 caractères min)." }, { status: 400 });
 
   const { firstName, lastName, email, phone, password } = parsed.data;
 

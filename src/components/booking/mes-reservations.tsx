@@ -168,10 +168,32 @@ function BookingCard({ booking, showCancel = false, cancellationDeadlineHours = 
               ) : cancelStep === "confirm" ? (
                 <div className="space-y-3">
                   {canCancel ? (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-sm text-blue-800 font-medium">ℹ Annulation gratuite</p>
-                      <p className="text-xs text-blue-700 mt-0.5">Un avoir sera crédité sur votre compte et utilisable pour votre prochaine réservation.</p>
-                    </div>
+                    <>
+                      {/* Choix remboursement/avoir uniquement pour paiements Stripe */}
+                      {booking.paymentMethod === "STRIPE" && (booking.amountPaid ?? 0) > 0 ? (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                          <p className="text-sm text-blue-800 font-medium">ℹ Annulation gratuite — choisissez votre compensation</p>
+                          <label className="flex items-center gap-2 text-sm text-blue-800 cursor-pointer">
+                            <input type="radio" name="cancelAction" value="credit" checked={cancelAction === "credit"} onChange={() => setCancelAction("credit")} className="accent-primary" />
+                            Avoir sur mon compte ({formatPrice(booking.amountPaid ?? 0)}) — utilisable immédiatement
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-blue-800 cursor-pointer">
+                            <input type="radio" name="cancelAction" value="refund" checked={cancelAction === "refund"} onChange={() => setCancelAction("refund")} className="accent-primary" />
+                            Remboursement sur ma carte bancaire (3-5 jours ouvrés)
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm text-blue-800 font-medium">ℹ Annulation gratuite</p>
+                          <p className="text-xs text-blue-700 mt-0.5">
+                            {booking.paymentMethod === "CARNET" ? "Votre crédit carnet sera restitué." :
+                             booking.paymentMethod === "SUBSCRIPTION" ? "Votre crédit abonnement sera restitué." :
+                             booking.paymentMethod === "GIFT_VOUCHER" ? "Votre bon cadeau sera restitué." :
+                             "Votre réservation sera annulée sans frais."}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                       <p className="text-sm text-amber-800 font-medium">⚠ Annulation tardive</p>

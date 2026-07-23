@@ -28,10 +28,6 @@ export function canCancelBooking(courseStartTime: Date | string, deadlineHours =
   return differenceInHours(new Date(courseStartTime), new Date()) >= deadlineHours;
 }
 
-export function generateVoucherCode(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
-}
-
 export function slugify(text: string): string {
   return text
     .toLowerCase()
