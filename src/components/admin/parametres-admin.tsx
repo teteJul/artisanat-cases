@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { formatPrice } from "@/lib/utils";
 import { Plus, Trash2, Pencil, Check, X, Loader2 } from "lucide-react";
 
@@ -15,6 +15,8 @@ interface Service {
   allowCarnet: boolean;
   allowMultiPerson: boolean;
   isActive: boolean;
+  description?: string | null;
+  shortDescription?: string | null;
 }
 
 interface Plan {
@@ -182,7 +184,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
   const [saving, setSaving] = useState(false);
 
   // Formulaire nouveau service
-  const emptyService = { name: "", type: "COLLECTIVE_POTTERY", pricingType: "PER_PERSON", price: "", durationMinutes: "90", maxParticipants: "10", allowCarnet: false, allowMultiPerson: false };
+  const emptyService = { name: "", type: "COLLECTIVE_POTTERY", pricingType: "PER_PERSON", price: "", durationMinutes: "90", maxParticipants: "10", allowCarnet: false, allowMultiPerson: false, shortDescription: "", description: "" };
   const [newService, setNewService] = useState(emptyService);
   const [editServiceId, setEditServiceId] = useState<string | null>(null);
   const [editService, setEditService] = useState<Record<string, string>>({});
@@ -208,6 +210,16 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
     });
     const data = await res.json();
     if (res.ok) { setServices(services.map((s) => s.id === id ? { ...s, ...data, price: Number(data.price) } : s)); setEditServiceId(null); }
+  }
+
+  async function deleteService(id: string, name: string) {
+    if (!confirm(`Supprimer le service "${name}" ? Cette action est irréversible.`)) return;
+    const res = await fetch("/api/admin/services", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setServices(services.filter((s) => s.id !== id));
   }
 
   async function toggleService(id: string, isActive: boolean) {
@@ -275,6 +287,14 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                   Multi-personnes
                 </label>
               </div>
+              <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
+                <label className="text-xs font-medium text-muted-foreground">Description courte</label>
+                <input type="text" placeholder="Ex : Initiez-vous à la poterie en groupe" value={newService.shortDescription} onChange={(e) => setNewService({ ...newService, shortDescription: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </div>
+              <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3">
+                <label className="text-xs font-medium text-muted-foreground">Description longue</label>
+                <textarea rows={3} placeholder="Description complète du service..." value={newService.description} onChange={(e) => setNewService({ ...newService, description: e.target.value })} className="border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+              </div>
             </div>
             <button onClick={addService} disabled={saving || !newService.name || !newService.price} className="mt-3 flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Ajouter
@@ -297,53 +317,74 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
               </thead>
               <tbody className="divide-y divide-border">
                 {services.map((s) => (
-                  <tr key={s.id} className={!s.isActive ? "opacity-50" : ""}>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {editServiceId === s.id ? <input value={String(editService.name ?? s.name)} onChange={(e) => setEditService({ ...editService, name: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background w-full" /> : s.name}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
-                      {editServiceId === s.id ? (
-                        <select value={editService.type ?? s.type} onChange={(e) => setEditService({ ...editService, type: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
-                          {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                        </select>
-                      ) : (
-                        SERVICE_TYPES.find((t) => t.value === s.type)?.label ?? s.type
-                      )}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">
-                      {editServiceId === s.id ? (
-                        <select value={editService.pricingType ?? s.pricingType} onChange={(e) => setEditService({ ...editService, pricingType: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
-                          <option value="PER_PERSON">Collectif (par pers.)</option>
-                          <option value="FIXED">Groupe / Personnel (forfait)</option>
-                        </select>
-                      ) : (
-                        s.pricingType === "FIXED" ? "Forfait" : "Par pers."
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-primary">
-                      {editServiceId === s.id ? <input type="number" value={editService.price ?? String(s.price)} onChange={(e) => setEditService({ ...editService, price: e.target.value })} step="0.5" className="border border-input rounded px-2 py-1 text-sm bg-background w-20 text-right" /> : formatPrice(s.price)}
-                    </td>
-                    <td className="px-4 py-3 text-center text-muted-foreground hidden sm:table-cell">
-                      {editServiceId === s.id ? <input type="number" value={editService.durationMinutes ?? String(s.durationMinutes)} onChange={(e) => setEditService({ ...editService, durationMinutes: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background w-16 text-center" /> : `${s.durationMinutes} min`}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button onClick={() => toggleService(s.id, !s.isActive)} className={`w-8 h-4 rounded-full transition-colors ${s.isActive ? "bg-green-500" : "bg-muted"}`}>
-                        <div className={`w-3 h-3 bg-white rounded-full mx-auto transition-transform ${s.isActive ? "translate-x-1" : "-translate-x-1"}`} />
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 justify-end">
+                  <React.Fragment key={s.id}>
+                    <tr className={!s.isActive ? "opacity-50" : ""}>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {editServiceId === s.id ? <input value={String(editService.name ?? s.name)} onChange={(e) => setEditService({ ...editService, name: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background w-full" /> : s.name}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell text-xs">
                         {editServiceId === s.id ? (
-                          <>
-                            <button onClick={() => saveService(s.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><Check className="w-4 h-4" /></button>
-                            <button onClick={() => setEditServiceId(null)} className="p-1.5 text-muted-foreground hover:bg-secondary rounded"><X className="w-4 h-4" /></button>
-                          </>
+                          <select value={editService.type ?? s.type} onChange={(e) => setEditService({ ...editService, type: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
+                            {SERVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
                         ) : (
-                          <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, type: s.type, pricingType: s.pricingType ?? "PER_PERSON", price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants) } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                          SERVICE_TYPES.find((t) => t.value === s.type)?.label ?? s.type
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">
+                        {editServiceId === s.id ? (
+                          <select value={editService.pricingType ?? s.pricingType} onChange={(e) => setEditService({ ...editService, pricingType: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background">
+                            <option value="PER_PERSON">Collectif (par pers.)</option>
+                            <option value="FIXED">Groupe / Personnel (forfait)</option>
+                          </select>
+                        ) : (
+                          s.pricingType === "FIXED" ? "Forfait" : "Par pers."
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-primary">
+                        {editServiceId === s.id ? <input type="number" value={editService.price ?? String(s.price)} onChange={(e) => setEditService({ ...editService, price: e.target.value })} step="0.5" className="border border-input rounded px-2 py-1 text-sm bg-background w-20 text-right" /> : formatPrice(s.price)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-muted-foreground hidden sm:table-cell">
+                        {editServiceId === s.id ? <input type="number" value={editService.durationMinutes ?? String(s.durationMinutes)} onChange={(e) => setEditService({ ...editService, durationMinutes: e.target.value })} className="border border-input rounded px-2 py-1 text-sm bg-background w-16 text-center" /> : `${s.durationMinutes} min`}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => toggleService(s.id, !s.isActive)} className={`w-8 h-4 rounded-full transition-colors ${s.isActive ? "bg-green-500" : "bg-muted"}`}>
+                          <div className={`w-3 h-3 bg-white rounded-full mx-auto transition-transform ${s.isActive ? "translate-x-1" : "-translate-x-1"}`} />
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          {editServiceId === s.id ? (
+                            <>
+                              <button onClick={() => saveService(s.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><Check className="w-4 h-4" /></button>
+                              <button onClick={() => setEditServiceId(null)} className="p-1.5 text-muted-foreground hover:bg-secondary rounded"><X className="w-4 h-4" /></button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, type: s.type, pricingType: s.pricingType ?? "PER_PERSON", price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants), shortDescription: s.shortDescription ?? "", description: s.description ?? "" } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                              <button onClick={() => deleteService(s.id, s.name)} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded"><Trash2 className="w-4 h-4" /></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {editServiceId === s.id && (
+                      <tr className="bg-secondary/30">
+                        <td colSpan={7} className="px-4 pb-3 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-muted-foreground">Description courte</label>
+                              <input type="text" placeholder="Ex : Initiez-vous à la poterie en groupe" value={editService.shortDescription ?? ""} onChange={(e) => setEditService({ ...editService, shortDescription: e.target.value })} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-muted-foreground">Description longue</label>
+                              <textarea rows={2} placeholder="Description complète du service..." value={editService.description ?? ""} onChange={(e) => setEditService({ ...editService, description: e.target.value })} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

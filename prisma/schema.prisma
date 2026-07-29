@@ -96,6 +96,7 @@ model ServiceType {
   slots        CourseSlot[]
   carnets      Carnet[]
   giftVouchers GiftVoucher[]
+  carnetPlans  CarnetPlan[]
 
   @@map("service_types")
 }
@@ -192,18 +193,38 @@ model Carnet {
   id              String   @id @default(cuid())
   userId          String
   serviceTypeId   String
+  planId          String?
   totalCredits    Int
   usedCredits     Int      @default(0)
   stripePaymentId String?
+  stripeSessionId String?
   purchasedAt     DateTime @default(now())
   expiresAt       DateTime
   isActive        Boolean  @default(true)
 
   user        User        @relation(fields: [userId], references: [id])
   serviceType ServiceType @relation(fields: [serviceTypeId], references: [id])
+  plan        CarnetPlan? @relation(fields: [planId], references: [id])
   bookings    Booking[]
 
   @@map("carnets")
+}
+
+model CarnetPlan {
+  id              String      @id @default(cuid())
+  name            String
+  description     String?     @db.Text
+  serviceTypeId   String
+  numberOfSessions Int
+  price           Decimal     @db.Decimal(10, 2)
+  validityMonths  Int         @default(12)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+
+  serviceType ServiceType @relation(fields: [serviceTypeId], references: [id])
+  carnets     Carnet[]
+
+  @@map("carnet_plans")
 }
 
 // ─── Abonnements ─────────────────────────────────────────────────────────────

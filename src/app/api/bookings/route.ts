@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       if (paymentMethod === "CARNET") {
         if (!carnetId) throw new Error("CARNET_REQUIRED");
         const carnet = await tx.carnet.findFirst({
-          where: { id: carnetId, userId: session.user.id, isActive: true },
+          where: { id: carnetId, userId: session.user.id, isActive: true, serviceTypeId: slot.serviceTypeId },
         });
         const creditsNeeded = isFixed ? 1 : participantCount;
         if (!carnet) throw new Error("CARNET_NOT_FOUND");

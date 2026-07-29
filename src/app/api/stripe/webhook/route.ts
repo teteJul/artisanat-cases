@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const checkoutSession = event.data.object as Stripe.Checkout.Session;
-    const { bookingId, giftVoucherId: metaGiftVoucherId, subscriptionId, voucherId } = checkoutSession.metadata ?? {};
+    const { bookingId, giftVoucherId: metaGiftVoucherId, subscriptionId, voucherId, carnetPlanId, userId: carnetUserId, serviceTypeId: carnetServiceTypeId, numberOfSessions, validityMonths } = checkoutSession.metadata ?? {};
 
     // ── Réservation ──────────────────────────────────────────────────────────
     if (bookingId) {
@@ -144,6 +144,55 @@ export async function POST(req: NextRequest) {
             appUrl: process.env.NEXT_PUBLIC_APP_URL!,
           }),
         }).catch((e) => console.error("[webhook] Email bon cadeau échoué:", e));
+      }
+    }
+
+    // ── Achat carnet ─────────────────────────────────────────────────────────
+    if (carnetPlanId && carnetUserId && carnetServiceTypeId) {
+      // Idempotence : vérifier qu'on n'a pas déjà créé un carnet pour cette session
+      const existing = await prisma.carnet.findFirst({
+        where: { stripeSessionId: checkoutSession.id },
+      });
+      if (!existing) {
+        const sessions = parseInt(numberOfSessions ?? "0");
+        const months = parseInt(validityMonths ?? "12");
+        const expiresAt = new Date();
+        expiresAt.setMonth(expiresAt.getMonth() + months);
+
+        const carnet = await prisma.carnet.create({
+          data: {
+            userId: carnetUserId,
+            serviceTypeId: carnetServiceTypeId,
+            planId: carnetPlanId,
+            totalCredits: sessions,
+            usedCredits: 0,
+            stripePaymentId: checkoutSession.payment_intent as string,
+            stripeSessionId: checkoutSession.id,
+            expiresAt,
+            isActive: true,
+          },
+          include: { user: true, serviceType: true },
+        });
+
+        resend.emails.send({
+          from: EMAIL_FROM,
+          to: carnet.user.email,
+          subject: `Votre carnet ${carnet.serviceType.name} est activé !`,
+          html: `
+            <h2>Votre carnet de cours est prêt !</h2>
+            <p>Bonjour ${carnet.user.firstName ?? carnet.user.name ?? "Client"},</p>
+            <p>Votre carnet <strong>${carnet.serviceType.name}</strong> a bien été activé :</p>
+            <ul>
+              <li><strong>${sessions} cours</strong> disponibles</li>
+              <li>Valable jusqu'au <strong>${expiresAt.toLocaleDateString("fr-FR")}</strong></li>
+            </ul>
+            <p>Réservez vos cours dès maintenant !</p>
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/reserver" style="background:#b5552a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin:16px 0;">
+              Réserver un cours
+            </a>
+            <p style="color:#9a6b50;font-size:13px;">— L'équipe Artisanat Cases</p>
+          `,
+        }).catch((e) => console.error("[webhook] Email carnet échoué:", e));
       }
     }
   }

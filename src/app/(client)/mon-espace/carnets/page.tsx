@@ -10,6 +10,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { SubscriptionBuySection } from "@/components/subscription/subscription-buy-section";
 import { SubscriptionCancelButton } from "@/components/subscription/subscription-cancel-button";
+import { CarnetBuySection } from "@/components/carnet/carnet-buy-section";
 
 export const metadata: Metadata = { title: "Mes carnets & abonnements" };
 
@@ -17,7 +18,7 @@ export const metadata: Metadata = { title: "Mes carnets & abonnements" };
 export default async function MesCarnetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ subSuccess?: string; subscriptionId?: string; subCancelled?: string }>;
+  searchParams: Promise<{ subSuccess?: string; subscriptionId?: string; subCancelled?: string; carnetSuccess?: string; carnetCancelled?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -67,7 +68,7 @@ export default async function MesCarnetPage({
     }
   }
 
-  const [carnets, subscriptions, credits, plans] = await Promise.all([
+  const [carnets, subscriptions, credits, plans, carnetPlans] = await Promise.all([
     prisma.carnet.findMany({
       where: { userId: session.user.id },
       include: { serviceType: true },
@@ -84,6 +85,11 @@ export default async function MesCarnetPage({
     }),
     prisma.subscriptionPlan.findMany({
       where: { isActive: true },
+      orderBy: { price: "asc" },
+    }),
+    prisma.carnetPlan.findMany({
+      where: { isActive: true },
+      include: { serviceType: { select: { id: true, name: true } } },
       orderBy: { price: "asc" },
     }),
   ]);
@@ -105,6 +111,22 @@ export default async function MesCarnetPage({
             <p className="font-medium text-green-800">Abonnement activé !</p>
             <p className="text-sm text-green-600">Vous recevrez un email de confirmation dans quelques instants.</p>
           </div>
+        </div>
+      )}
+
+      {params.carnetSuccess === "true" && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+          <span className="text-green-600 text-xl">✅</span>
+          <div>
+            <p className="font-medium text-green-800">Carnet activé !</p>
+            <p className="text-sm text-green-600">Vous recevrez un email de confirmation. Votre carnet est disponible ci-dessous.</p>
+          </div>
+        </div>
+      )}
+
+      {params.carnetCancelled === "true" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-amber-800">Paiement annulé — votre carnet n'a pas été activé.</p>
         </div>
       )}
 
@@ -229,6 +251,15 @@ export default async function MesCarnetPage({
           </div>
         )}
       </section>
+
+      {/* Acheter un carnet */}
+      {carnetPlans.length > 0 && (
+        <section className="mb-8">
+          <h2 className="font-semibold text-foreground mb-2">Acheter un carnet de cours</h2>
+          <p className="text-sm text-muted-foreground mb-4">Un carnet vous permet de réserver plusieurs cours à tarif avantageux.</p>
+          <CarnetBuySection plans={carnetPlans.map((p) => ({ ...p, price: Number(p.price) }))} />
+        </section>
+      )}
 
       {/* Acheter un abonnement */}
       {plans.length > 0 && (
