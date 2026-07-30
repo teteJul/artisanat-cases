@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/utils";
 interface CarnetPlan {
   id: string;
   name: string;
+  description?: string | null;
   numberOfSessions: number;
   price: number;
   validityMonths: number;
@@ -26,6 +27,11 @@ export function CarnetBuySection({ plans }: { plans: CarnetPlan[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId }),
       });
+      if (res.status === 401) {
+        const callbackUrl = encodeURIComponent(window.location.pathname);
+        window.location.href = `/connexion?callbackUrl=${callbackUrl}`;
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Une erreur est survenue");
@@ -48,24 +54,29 @@ export function CarnetBuySection({ plans }: { plans: CarnetPlan[] }) {
   }, {});
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
       )}
       {Object.entries(byService).map(([serviceName, servicePlans]) => (
         <div key={serviceName}>
-          <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5" />
-            {serviceName}
-          </p>
+          {Object.keys(byService).length > 1 && (
+            <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5" />
+              {serviceName}
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {servicePlans.map((plan) => (
               <div key={plan.id} className="bg-card border border-border rounded-xl p-5 flex flex-col">
                 <p className="font-semibold text-foreground mb-1">{plan.name}</p>
-                <p className="text-sm text-muted-foreground mb-3">
+                <p className="text-sm text-muted-foreground">
                   {plan.numberOfSessions} cours · valable {plan.validityMonths} mois
                 </p>
-                <div className="mt-auto flex items-center justify-between">
+                {plan.description && (
+                  <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
+                )}
+                <div className="mt-auto pt-4 flex items-center justify-between">
                   <p className="text-xl font-bold text-primary">{formatPrice(plan.price)}</p>
                   <button
                     onClick={() => handleBuy(plan.id)}

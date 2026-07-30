@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
+import { CarnetBuySection } from "@/components/carnet/carnet-buy-section";
 
 export const metadata: Metadata = {
   title: "Tarifs",
@@ -12,10 +13,15 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function TarifsPage() {
-  const [services, pieces, plans] = await Promise.all([
+  const [services, pieces, plans, carnetPlans] = await Promise.all([
     prisma.serviceType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.paintingPiece.findMany({ where: { isAvailable: true }, orderBy: { sortOrder: "asc" } }),
     prisma.subscriptionPlan.findMany({ where: { isActive: true } }),
+    prisma.carnetPlan.findMany({
+      where: { isActive: true },
+      include: { serviceType: { select: { id: true, name: true } } },
+      orderBy: { price: "asc" },
+    }),
   ]);
 
   const collectif = services.filter((s) => s.type === "COLLECTIVE_POTTERY");
@@ -33,41 +39,43 @@ export default async function TarifsPage() {
       </div>
 
       {/* Cours collectifs */}
-      <section className="mb-14">
-        <h2 className="font-heading text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-          <span className="text-3xl">🏺</span> Cours collectifs poterie
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          {/* À l'unité */}
-          {collectif.map((s) => (
-            <div key={s.id} className="bg-card border border-border rounded-xl p-6">
-              <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">À l'unité</p>
-              <p className="font-heading text-3xl font-bold text-primary">{formatPrice(Number(s.price))}</p>
-              <p className="text-muted-foreground text-sm mt-1">par personne · {s.durationMinutes} min</p>
-              <ul className="mt-4 space-y-1.5 text-sm text-foreground">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Mercredi & Samedi</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Réservation pour plusieurs</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />2 créneaux consécutifs possibles</li>
-              </ul>
-            </div>
-          ))}
-
-          {/* Carnet */}
-          <div className="bg-primary/5 border border-primary/30 rounded-xl p-6 relative">
-            <span className="absolute -top-3 left-4 bg-primary text-primary-foreground text-xs font-medium px-3 py-1 rounded-full">
-              Populaire
-            </span>
-            <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">Carnet 10 cours</p>
-            <p className="font-heading text-3xl font-bold text-primary">120€</p>
-            <p className="text-muted-foreground text-sm mt-1">soit 12€/cours · valable 1 an</p>
-            <ul className="mt-4 space-y-1.5 text-sm text-foreground">
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Réservez quand vous voulez</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Crédits pour plusieurs personnes</li>
-              <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Valable 1 an</li>
-            </ul>
+      {collectif.length > 0 && (
+        <section className="mb-14">
+          <h2 className="font-heading text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
+            <span className="text-3xl">🏺</span> Cours collectifs poterie
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {collectif.map((s) => (
+              <div key={s.id} className="bg-card border border-border rounded-xl p-6">
+                <p className="text-sm text-muted-foreground uppercase tracking-wider mb-2">À l'unité</p>
+                <p className="font-heading text-3xl font-bold text-primary">{formatPrice(Number(s.price))}</p>
+                <p className="text-muted-foreground text-sm mt-1">par personne · {s.durationMinutes} min</p>
+                {s.shortDescription && <p className="text-muted-foreground text-xs mt-2">{s.shortDescription}</p>}
+                <ul className="mt-4 space-y-1.5 text-sm text-foreground">
+                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Mercredi & Samedi</li>
+                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Réservation pour plusieurs</li>
+                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />2 créneaux consécutifs possibles</li>
+                </ul>
+              </div>
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* Carnets de cours */}
+      {carnetPlans.length > 0 && (
+        <section className="mb-14">
+          <h2 className="font-heading text-2xl font-bold text-foreground mb-2 flex items-center gap-3">
+            <span className="text-3xl">📒</span> Carnets de cours
+          </h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            Achetez plusieurs cours à l'avance et économisez. Réservez quand vous voulez, valables 1 an.
+          </p>
+          <CarnetBuySection
+            plans={carnetPlans.map((p) => ({ ...p, price: Number(p.price) }))}
+          />
+        </section>
+      )}
 
       {/* Engagements annuels */}
       {plans.length > 0 && (
