@@ -371,7 +371,11 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                     {editServiceId === s.id && (
                       <tr className="bg-secondary/30">
                         <td colSpan={7} className="px-4 pb-3 pt-1">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-muted-foreground">Capacité max (personnes)</label>
+                              <input type="number" min={1} value={editService.maxParticipants ?? ""} onChange={(e) => setEditService({ ...editService, maxParticipants: e.target.value })} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+                            </div>
                             <div className="flex flex-col gap-1">
                               <label className="text-xs font-medium text-muted-foreground">Description courte</label>
                               <input type="text" placeholder="Ex : Initiez-vous à la poterie en groupe" value={editService.shortDescription ?? ""} onChange={(e) => setEditService({ ...editService, shortDescription: e.target.value })} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring" />

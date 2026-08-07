@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resend, EMAIL_FROM } from "@/lib/resend";
+import VoucherConfirmationEmail from "@/../emails/voucher-confirmation";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 
 async function checkAdmin() {
   const session = await auth();
@@ -75,15 +78,35 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Envoyer l'email au destinataire si une adresse est fournie
+  if (purchaserEmail) {
+    const serviceName = description.replace("Bon cadeau — ", "");
+    const expiresAtLabel = expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+    resend.emails.send({
+      from: EMAIL_FROM,
+      to: purchaserEmail,
+      subject: `Votre bon cadeau Artisanat Cases — Code : ${code}`,
+      react: VoucherConfirmationEmail({
+        purchaserName: purchaserName ?? "Client",
+        serviceName,
+        code,
+        expiresAt: expiresAtLabel,
+        appUrl: process.env.NEXT_PUBLIC_APP_URL!,
+      }),
+    }).catch((e) => console.error("[admin/bons-cadeaux] Email échoué:", e));
+  }
+
   return NextResponse.json({ ...voucher, amountValue: voucher.amountValue ? Number(voucher.amountValue) : null });
 }
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(8);
   let code = "";
   for (let i = 0; i < 8; i++) {
     if (i === 4) code += "-";
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[bytes[i] % chars.length];
   }
   return code;
 }
