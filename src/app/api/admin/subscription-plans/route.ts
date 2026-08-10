@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 const planSchema = z.object({
@@ -35,6 +36,7 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
 
   const plan = await prisma.subscriptionPlan.update({ where: { id }, data });
+  revalidatePath("/tarifs");
   return NextResponse.json({ ...plan, price: Number(plan.price) });
 }
 
@@ -44,6 +46,14 @@ export async function DELETE(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: "ID requis" }, { status: 400 });
 
-  await prisma.subscriptionPlan.update({ where: { id }, data: { isActive: false } });
+  try {
+    await prisma.subscriptionPlan.delete({ where: { id } });
+  } catch {
+    return NextResponse.json(
+      { error: "Ce plan a des abonnements actifs associés. Désactivez-le plutôt." },
+      { status: 409 }
+    );
+  }
+  revalidatePath("/tarifs");
   return NextResponse.json({ success: true });
 }

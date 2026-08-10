@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Clock, MapPin, Loader2, CheckCircle } from "lucide-react";
+import { Mail, Clock, MapPin, Phone, Loader2, CheckCircle } from "lucide-react";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "" });
@@ -100,7 +100,7 @@ export default function ContactPage() {
               <div className="flex items-start gap-3">
                 <Clock className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Horaires des cours</p>
+                  <p className="text-sm font-medium text-foreground">Horaires des cours collectifs</p>
                   <p className="text-sm text-muted-foreground mt-0.5">
                     Mercredi & Samedi<br />
                     14h–15h30 / 15h30–17h
@@ -117,10 +117,23 @@ export default function ContactPage() {
                 </div>
               </div>
               <div className="flex items-start gap-3">
+                <Phone className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Téléphone</p>
+                  <a href="tel:+33621104399" className="text-sm text-primary hover:underline">
+                    06 21 10 43 99
+                  </a>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Localisation</p>
-                  <p className="text-sm text-muted-foreground">Pyrénées-Orientales (66)</p>
+                  <p className="text-sm font-medium text-foreground">Adresse</p>
+                  <p className="text-sm text-muted-foreground">
+                    Casteil<br />
+                    13 Bd St Martin du Canigou<br />
+                    66820
+                  </p>
                 </div>
               </div>
             </div>

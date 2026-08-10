@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Mail, Clock } from "lucide-react";
+import { MapPin, Mail, Clock, Phone } from "lucide-react";
 
 export function Footer() {
   return (
@@ -30,6 +30,16 @@ export function Footer() {
                 <a href="mailto:manon@artisanatcases.fr" className="hover:text-background transition-colors">
                   manon@artisanatcases.fr
                 </a>
+              </li>
+              <li className="flex items-start gap-2">
+                <Phone className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                <a href="tel:+33621104399" className="hover:text-background transition-colors">
+                  06 21 10 43 99
+                </a>
+              </li>
+              <li className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                <span>Casteil<br />13 Bd St Martin du Canigou<br />66820</span>
               </li>
             </ul>
           </div>

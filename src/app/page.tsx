@@ -2,8 +2,33 @@ import Link from "next/link";
 import { ArrowRight, Star, Clock, Users, Gift } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { prisma } from "@/lib/prisma";
+import { formatPrice } from "@/lib/utils";
 
-export default function HomePage() {
+export const revalidate = 60;
+
+const TYPE_EMOJI: Record<string, string> = {
+  COLLECTIVE_POTTERY: "🏺",
+  PAINTING: "🎨",
+  PRIVATE_POTTERY: "✨",
+  PRIVATE_GROUP_POTTERY: "✨",
+  BIRTHDAY: "🎂",
+  COURS: "📚",
+};
+
+export default async function HomePage() {
+  const [services, paintingPieces] = await Promise.all([
+    prisma.serviceType.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.paintingPiece.findMany({
+      where: { isAvailable: true },
+      orderBy: { sortOrder: "asc" },
+      take: 4,
+    }),
+  ]);
+
   return (
     <>
       <Navbar />
@@ -49,11 +74,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Services aperçu */}
+        {/* Services */}
         <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-3">
-              Nos ateliers
+              Nos cours et nos ateliers
             </h2>
             <p className="text-muted-foreground max-w-md mx-auto">
               Que vous soyez débutant ou confirmé, nous avons le cours qu'il vous faut.
@@ -63,20 +88,20 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {services.map((service) => (
               <div
-                key={service.title}
+                key={service.id}
                 className="group bg-card border border-border rounded-xl p-6 hover:shadow-lg hover:border-primary/30 transition-all"
               >
-                <div className="text-3xl mb-4">{service.emoji}</div>
+                <div className="text-3xl mb-4">{TYPE_EMOJI[service.type] ?? "🏺"}</div>
                 <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
-                  {service.title}
+                  {service.name}
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  {service.description}
+                  {service.shortDescription ?? service.description ?? ""}
                 </p>
                 <div className="flex items-center justify-between">
-                  <span className="text-primary font-semibold">{service.price}</span>
+                  <span className="text-primary font-semibold">{formatPrice(Number(service.price))}</span>
                   <Link
-                    href={service.href}
+                    href="/services"
                     className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                   >
                     En savoir plus <ArrowRight className="w-3 h-3" />
@@ -103,21 +128,21 @@ export default function HomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div>
                 <p className="text-primary text-sm font-medium uppercase tracking-widest mb-2">
-                  Sans rendez-vous
+                  À venir
                 </p>
                 <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-4">
                   Peinture sur céramique en boutique
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  Venez peindre directement dans notre boutique sur des tables dédiées — pas besoin
-                  de réserver ! Choisissez votre pièce et laissez libre cours à votre créativité.
+                  Venez peindre directement dans notre boutique sur des tables dédiées. Choisissez
+                  votre pièce et laissez libre cours à votre créativité.
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
                   Des créneaux dédiés sont également disponibles à la réservation pour les groupes
                   et ateliers planifiés.
                 </p>
                 <Link
-                  href="/services#peinture"
+                  href="/tarifs"
                   className="inline-flex items-center gap-2 border border-primary text-primary px-5 py-2.5 rounded-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors text-sm"
                 >
                   Voir les pièces disponibles
@@ -127,12 +152,11 @@ export default function HomePage() {
               <div className="grid grid-cols-2 gap-4">
                 {paintingPieces.map((piece) => (
                   <div
-                    key={piece.name}
+                    key={piece.id}
                     className="bg-card border border-border rounded-lg p-4 text-center"
                   >
-                    <div className="text-2xl mb-2">{piece.emoji}</div>
                     <p className="text-sm font-medium text-foreground">{piece.name}</p>
-                    <p className="text-primary font-semibold text-sm mt-1">{piece.price}</p>
+                    <p className="text-primary font-semibold text-sm mt-1">{formatPrice(Number(piece.price))}</p>
                   </div>
                 ))}
               </div>
@@ -161,8 +185,8 @@ export default function HomePage() {
             <Gift className="w-10 h-10 mx-auto mb-4 opacity-80" />
             <h2 className="font-heading text-3xl font-bold mb-3">Offrez un cours de poterie</h2>
             <p className="opacity-80 mb-6 leading-relaxed">
-              Un cadeau original et inoubliable ! Nos bons cadeaux sont valables pour tous nos
-              services et livrés par email en quelques instants.
+              Un cadeau original et inoubliable ! Nos bon cadeau sont valables pour tous nos
+              services et livré par email en quelques instants.
             </p>
             <Link
               href="/bon-cadeau"
@@ -178,64 +202,6 @@ export default function HomePage() {
     </>
   );
 }
-
-const services = [
-  {
-    emoji: "🏺",
-    title: "Cours collectifs poterie",
-    description:
-      "Séances de 1h30 en groupe. Idéales pour débuter ou progresser dans une ambiance conviviale. Mercredi et samedi.",
-    price: "À partir de 12€/cours",
-    href: "/services#collectif",
-  },
-  {
-    emoji: "🎨",
-    title: "Atelier peinture céramique",
-    description:
-      "Peignez et décorez des pièces en céramique. Accessible à tous, même sans expérience artistique.",
-    price: "5€ + pièce choisie",
-    href: "/services#peinture",
-  },
-  {
-    emoji: "✨",
-    title: "Cours particuliers",
-    description:
-      "Un accompagnement personnalisé pour progresser rapidement à votre rythme. Seul ou en petit groupe.",
-    price: "À partir de 50€",
-    href: "/services#particulier",
-  },
-  {
-    emoji: "🎂",
-    title: "Anniversaires enfants",
-    description:
-      "Une fête créative inoubliable ! 2h de poterie + bon cadeau pour l'enfant fêté. De 5 à 10 enfants.",
-    price: "12€/enfant",
-    href: "/services#anniversaire",
-  },
-  {
-    emoji: "📚",
-    title: "Engagement à l'année",
-    description:
-      "Progressez régulièrement avec un engagement annuel. La formule la plus économique pour les passionnés.",
-    price: "Dès 200€/an",
-    href: "/tarifs#engagement",
-  },
-  {
-    emoji: "🗂️",
-    title: "Carnet 10 cours",
-    description:
-      "Réservez selon votre planning avec souplesse. Valable 1 an sur les cours collectifs.",
-    price: "120€ les 10 cours",
-    href: "/tarifs#carnet",
-  },
-];
-
-const paintingPieces = [
-  { emoji: "🍽️", name: "Assiette", price: "10€" },
-  { emoji: "☕", name: "Mug / Tasse", price: "6€" },
-  { emoji: "🥣", name: "Bol", price: "7€" },
-  { emoji: "🏺", name: "Vase", price: "12€" },
-];
 
 const features = [
   {
@@ -255,7 +221,7 @@ const features = [
   },
   {
     icon: Gift,
-    title: "Bons cadeaux",
-    description: "Offrez une expérience créative à vos proches, livrée par email.",
+    title: "Bon cadeau",
+    description: "Offrez une expérience créative à vos proches, livré par email.",
   },
 ];

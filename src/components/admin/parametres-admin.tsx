@@ -48,6 +48,21 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Record<string, string>>({});
+
+  async function deletePlan(id: string, name: string) {
+    if (!confirm(`Supprimer le plan "${name}" ? Cette action est irréversible.`)) return;
+    const res = await fetch("/api/admin/subscription-plans", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) {
+      setPlans(plans.filter((p) => p.id !== id));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Erreur lors de la suppression.");
+    }
+  }
   const emptyPlan = { name: "", description: "", cycleType: "annuel", totalCourses: "30", price: "" };
   const [newPlan, setNewPlan] = useState(emptyPlan);
 
@@ -160,7 +175,10 @@ function AbonnementsTab({ plans: initPlans }: { plans: Plan[] }) {
                         <button onClick={() => setEditId(null)} className="p-1.5 text-muted-foreground hover:bg-secondary rounded"><X className="w-4 h-4" /></button>
                       </>
                     ) : (
-                      <button onClick={() => { setEditId(p.id); setEditData({ name: p.name, cycleType: p.cycleType, totalCourses: String(p.totalCourses), price: String(p.price) }); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                      <>
+                        <button onClick={() => { setEditId(p.id); setEditData({ name: p.name, cycleType: p.cycleType, totalCourses: String(p.totalCourses), price: String(p.price) }); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => deletePlan(p.id, p.name)} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded"><Trash2 className="w-4 h-4" /></button>
+                      </>
                     )}
                   </div>
                 </td>
@@ -219,7 +237,12 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    if (res.ok) setServices(services.filter((s) => s.id !== id));
+    if (res.ok) {
+      setServices(services.filter((s) => s.id !== id));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Erreur lors de la suppression.");
+    }
   }
 
   async function toggleService(id: string, isActive: boolean) {

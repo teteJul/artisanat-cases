@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 async function checkAdmin() {
@@ -50,6 +51,9 @@ export async function PUT(req: NextRequest) {
 
   const { id, ...data } = parsed.data;
   const service = await prisma.serviceType.update({ where: { id }, data });
+  revalidatePath("/");
+  revalidatePath("/services");
+  revalidatePath("/tarifs");
   return NextResponse.json(service);
 }
 
@@ -57,6 +61,16 @@ export async function DELETE(req: NextRequest) {
   if (!(await checkAdmin())) return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
   const { id } = await req.json();
-  await prisma.serviceType.update({ where: { id }, data: { isActive: false } });
+  try {
+    await prisma.serviceType.delete({ where: { id } });
+  } catch {
+    return NextResponse.json(
+      { error: "Ce service a des réservations ou créneaux associés. Désactivez-le plutôt." },
+      { status: 409 }
+    );
+  }
+  revalidatePath("/");
+  revalidatePath("/services");
+  revalidatePath("/tarifs");
   return NextResponse.json({ success: true });
 }
