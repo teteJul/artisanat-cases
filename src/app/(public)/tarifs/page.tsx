@@ -7,16 +7,15 @@ import { CarnetBuySection } from "@/components/carnet/carnet-buy-section";
 
 export const metadata: Metadata = {
   title: "Tarifs",
-  description: "Tous les tarifs des cours de poterie et ateliers céramique — à l'unité, carnet, engagement annuel.",
+  description: "Tous les tarifs des cours de poterie et ateliers céramique — à l'unité, carnet de cours.",
 };
 
 export const revalidate = 60;
 
 export default async function TarifsPage() {
-  const [services, pieces, plans, carnetPlans] = await Promise.all([
+  const [services, pieces, carnetPlans] = await Promise.all([
     prisma.serviceType.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.paintingPiece.findMany({ where: { isAvailable: true }, orderBy: { sortOrder: "asc" } }),
-    prisma.subscriptionPlan.findMany({ where: { isActive: true } }),
     prisma.carnetPlan.findMany({
       where: { isActive: true },
       include: { serviceType: { select: { id: true, name: true } } },
@@ -74,40 +73,6 @@ export default async function TarifsPage() {
           <CarnetBuySection
             plans={carnetPlans.map((p) => ({ ...p, price: Number(p.price) }))}
           />
-        </section>
-      )}
-
-      {/* Engagements annuels */}
-      {plans.length > 0 && (
-        <section className="mb-14">
-          <h2 className="font-heading text-2xl font-bold text-foreground mb-2 flex items-center gap-3">
-            <span className="text-3xl">📚</span> Engagement à l'année
-          </h2>
-          <p className="text-muted-foreground text-sm mb-6">
-            Du 1er septembre au 4 juillet · Hors vacances scolaires · Créneau flexible chaque semaine
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {plans.map((plan) => (
-              <div key={plan.id} className="bg-card border border-border rounded-xl p-6">
-                <p className="font-semibold text-foreground mb-1">{plan.name}</p>
-                <p className="font-heading text-3xl font-bold text-primary mt-2">
-                  {formatPrice(Number(plan.price))}
-                </p>
-                <p className="text-muted-foreground text-sm mt-1">
-                  {plan.totalCourses} cours · soit{" "}
-                  {formatPrice(Number(plan.price) / plan.totalCourses)}/cours
-                </p>
-                {plan.description && (
-                  <p className="text-muted-foreground text-xs mt-3">{plan.description}</p>
-                )}
-                <ul className="mt-4 space-y-1.5 text-sm text-foreground">
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Nominatif (1 personne)</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Créneau flexible</li>
-                  <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Bon cadeau offert</li>
-                </ul>
-              </div>
-            ))}
-          </div>
         </section>
       )}
 

@@ -13,7 +13,7 @@ export default async function MonEspacePage() {
   const deadlineSetting = await prisma.appSetting.findUnique({ where: { key: "cancellation_deadline_hours" } });
   const deadlineHours = deadlineSetting ? parseInt(deadlineSetting.value) : 48;
 
-  const [upcomingBookings, activeCarnets, activeSubscriptionsList, vouchers, credits] =
+  const [upcomingBookings, activeCarnets, vouchers, credits] =
     await Promise.all([
       prisma.booking.findMany({
         where: {
@@ -29,10 +29,6 @@ export default async function MonEspacePage() {
         where: { userId: session.user.id, isActive: true },
         include: { serviceType: true },
         orderBy: { expiresAt: "asc" },
-      }),
-      prisma.subscription.findMany({
-        where: { userId: session.user.id, status: "ACTIVE", endDate: { gte: new Date() } },
-        include: { plan: true },
       }),
       prisma.giftVoucher.findMany({
         where: { ownerId: session.user.id, status: "ACTIVE" },
@@ -57,7 +53,7 @@ export default async function MonEspacePage() {
         {[
           { label: "Cours à venir", value: upcomingBookings.length.toString(), icon: Calendar, href: "/mon-espace/reservations" },
           { label: "Carnets actifs", value: activeCarnets.length.toString(), icon: BookOpen, href: "/mon-espace/carnets" },
-          { label: "Abonnements actifs", value: activeSubscriptionsList.length.toString(), icon: Gift, href: "/mon-espace/carnets" },
+          { label: "Bons cadeaux", value: vouchers.length.toString(), icon: Gift, href: "/mon-espace/bons-cadeaux" },
           { label: "Crédit disponible", value: formatPrice(totalCredit), icon: CreditCard, href: "/mon-espace/carnets" },
         ].map((stat) => (
           <Link key={stat.label} href={stat.href} className="bg-card border border-border rounded-xl p-5 hover:border-primary/40 transition-colors group">
