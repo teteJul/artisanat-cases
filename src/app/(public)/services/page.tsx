@@ -4,6 +4,8 @@ import { ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Nos cours et services",
   description: "Découvrez tous nos cours de poterie et ateliers céramique.",

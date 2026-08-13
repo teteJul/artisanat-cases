@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Offrez un cours de poterie ou un atelier céramique en bon cadeau.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function BonCadeauPage() {
   const services = await prisma.serviceType.findMany({
     where: { isActive: true },
