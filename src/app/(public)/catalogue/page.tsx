@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "Découvrez les pièces de céramique disponibles à l'achat dans notre boutique physique.",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function CataloguePage() {
   const items = await prisma.catalogItem.findMany({

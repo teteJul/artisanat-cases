@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Découvrez les créations de l'atelier Artisanat Cases — poterie et céramique.",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function GaleriePage() {
   const images = await prisma.galleryImage.findMany({

@@ -5,7 +5,7 @@ import { Footer } from "@/components/layout/footer";
 import { prisma } from "@/lib/prisma";
 import { formatPrice } from "@/lib/utils";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 const TYPE_EMOJI: Record<string, string> = {
   COLLECTIVE_POTTERY: "🏺",
@@ -20,7 +20,8 @@ export default async function HomePage() {
   const [services, paintingPieces] = await Promise.all([
     prisma.serviceType.findMany({
       where: { isActive: true },
-      orderBy: { name: "asc" },
+      orderBy: { createdAt: "desc" },
+      take: 6,
     }),
     prisma.paintingPiece.findMany({
       where: { isAvailable: true },

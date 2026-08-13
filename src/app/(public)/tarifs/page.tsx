@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Tous les tarifs des cours de poterie et ateliers céramique — à l'unité, carnet de cours.",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export default async function TarifsPage() {
   const [services, pieces, carnetPlans] = await Promise.all([
