@@ -224,7 +224,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
     const res = await fetch("/api/admin/services", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...editService, price: parseFloat(String(editService.price ?? 0)), durationMinutes: parseInt(String(editService.durationMinutes ?? 90)), maxParticipants: parseInt(String(editService.maxParticipants ?? 10)) }),
+      body: JSON.stringify({ id, ...editService, price: parseFloat(String(editService.price ?? 0)), durationMinutes: parseInt(String(editService.durationMinutes ?? 90)), maxParticipants: parseInt(String(editService.maxParticipants ?? 10)), allowMultiPerson: editService.allowMultiPerson === "true", allowCarnet: editService.allowCarnet === "true" }),
     });
     const data = await res.json();
     if (res.ok) { setServices(services.map((s) => s.id === id ? { ...s, ...data, price: Number(data.price) } : s)); setEditServiceId(null); }
@@ -384,7 +384,7 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                             </>
                           ) : (
                             <>
-                              <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, type: s.type, pricingType: s.pricingType ?? "PER_PERSON", price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants), shortDescription: s.shortDescription ?? "", description: s.description ?? "" } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
+                              <button onClick={() => { setEditServiceId(s.id); setEditService({ name: s.name, type: s.type, pricingType: s.pricingType ?? "PER_PERSON", price: String(s.price), durationMinutes: String(s.durationMinutes), maxParticipants: String(s.maxParticipants), shortDescription: s.shortDescription ?? "", description: s.description ?? "", allowMultiPerson: String(s.allowMultiPerson), allowCarnet: String(s.allowCarnet) } as Record<string, string>); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded"><Pencil className="w-4 h-4" /></button>
                               <button onClick={() => deleteService(s.id, s.name)} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded"><Trash2 className="w-4 h-4" /></button>
                             </>
                           )}
@@ -407,6 +407,16 @@ export function ParametresAdmin({ settings, services: initServices, plans: initP
                               <label className="text-xs font-medium text-muted-foreground">Description longue</label>
                               <textarea rows={2} placeholder="Description complète du service..." value={editService.description ?? ""} onChange={(e) => setEditService({ ...editService, description: e.target.value })} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
                             </div>
+                          </div>
+                          <div className="flex gap-6 pt-1">
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input type="checkbox" checked={editService.allowMultiPerson === "true"} onChange={(e) => setEditService({ ...editService, allowMultiPerson: String(e.target.checked) })} className="rounded" />
+                              <span className="text-muted-foreground">Réservation multi-personnes</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input type="checkbox" checked={editService.allowCarnet === "true"} onChange={(e) => setEditService({ ...editService, allowCarnet: String(e.target.checked) })} className="rounded" />
+                              <span className="text-muted-foreground">Carnet de cours accepté</span>
+                            </label>
                           </div>
                         </td>
                       </tr>
