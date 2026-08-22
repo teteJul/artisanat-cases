@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDate, formatTime, formatPrice } from "@/lib/utils";
-import { Search, Users } from "lucide-react";
+import { Search, Users, X } from "lucide-react";
 
 interface Booking {
   id: string;
@@ -52,8 +52,24 @@ export function ReservationsAdmin({
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [localBookings, setLocalBookings] = useState(bookings);
 
-  const filtered = bookings.filter((b) => {
+  async function cancelPending(id: string) {
+    if (!confirm("Annuler cette réservation en attente ?")) return;
+    setCancellingId(id);
+    const res = await fetch(`/api/admin/bookings/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setLocalBookings((prev) => prev.map((b) => b.id === id ? { ...b, status: "CANCELLED_BY_ADMIN" } : b));
+      setExpandedId(null);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error ?? "Erreur lors de l'annulation");
+    }
+    setCancellingId(null);
+  }
+
+  const filtered = localBookings.filter((b) => {
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
@@ -184,6 +200,16 @@ export function ReservationsAdmin({
                                 <p className="text-xs text-muted-foreground">Réf: {booking.id}</p>
                                 <p className="text-xs text-muted-foreground">Créée le {formatDate(booking.createdAt, "d MMM yyyy à HH:mm")}</p>
                                 {booking.user.phone && <p className="text-xs text-muted-foreground">📞 {booking.user.phone}</p>}
+                                {booking.status === "PENDING" && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); cancelPending(booking.id); }}
+                                    disabled={cancellingId === booking.id}
+                                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                                  >
+                                    <X className="w-3 h-3" />
+                                    {cancellingId === booking.id ? "Annulation..." : "Annuler cette réservation"}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </td>
