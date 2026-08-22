@@ -52,7 +52,7 @@ export function SlotDetailModal({ slot, onClose, onUpdated }: Props) {
   const [placesError, setPlacesError] = useState("");
   const [placesLoading, setPlacesLoading] = useState(false);
 
-  const booked = slot.bookings.filter((b) => b.status === "CONFIRMED").length;
+  const booked = slot.bookings.filter((b) => b.status === "CONFIRMED").reduce((acc, b) => acc + b.participants.length, 0);
   const revenue = slot.bookings
     .filter((b) => b.status === "CONFIRMED")
     .reduce((sum, b) => sum + Number(b.amountPaid ?? 0), 0);

@@ -173,7 +173,7 @@ export function CoursAdmin({ services, holidays }: { services: Service[]; holida
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: "Total créneaux", value: filtered.filter((s) => !s.isCancelled).length },
-          { label: "Complets", value: filtered.filter((s) => !s.isCancelled && s.bookings.length >= s.maxParticipants).length },
+          { label: "Complets", value: filtered.filter((s) => !s.isCancelled && s.bookings.reduce((acc, b) => acc + b.participants.length, 0) >= s.maxParticipants).length },
           { label: "En attente", value: filtered.reduce((sum, s) => sum + s.waitlists.length, 0) },
           { label: "Annulés", value: filtered.filter((s) => s.isCancelled).length },
         ].map((stat) => (
@@ -225,7 +225,7 @@ export function CoursAdmin({ services, holidays }: { services: Service[]; holida
                 {isExpanded && (
                   <div className="border-t border-border divide-y divide-border">
                     {weekSlots.map((slot) => {
-                      const booked = slot.bookings.length;
+                      const booked = slot.bookings.reduce((acc, b) => acc + b.participants.length, 0);
                       const pct = Math.round((booked / slot.maxParticipants) * 100);
                       return (
                         <div
