@@ -73,7 +73,7 @@ export default function ContactPage() {
                   <option value="">Choisissez un sujet...</option>
                   <option>Renseignements sur les cours</option>
                   <option>Réservation de cours particulier</option>
-                  <option>Anniversaire / événement privé</option>
+                  <option>Événement privé</option>
                   <option>Question sur ma réservation</option>
                   <option>Bon cadeau</option>
                   <option>Autre</option>

@@ -16,7 +16,7 @@ const TYPE_LABELS: Record<string, string> = {
   PRIVATE_POTTERY: "Cours particulier",
   PRIVATE_GROUP_POTTERY: "Cours particulier groupe",
   PAINTING: "Atelier peinture",
-  BIRTHDAY: "Anniversaire",
+  BIRTHDAY: "Événement",
 };
 
 export default async function ServicesPage() {

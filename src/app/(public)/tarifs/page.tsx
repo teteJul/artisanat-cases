@@ -134,7 +134,7 @@ export default async function TarifsPage() {
       {anniversaire.length > 0 && (
         <section className="mb-14">
           <h2 className="font-heading text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
-            <span className="text-3xl">🎂</span> Anniversaire enfant
+            <span className="text-3xl">🎂</span> Événement
           </h2>
           {anniversaire.map((s) => (
             <div key={s.id} className="bg-card border border-border rounded-xl p-6">

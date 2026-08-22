@@ -39,7 +39,7 @@ const SERVICE_TYPES = [
   { value: "PRIVATE_POTTERY", label: "Poterie — Cours particulier" },
   { value: "PRIVATE_GROUP_POTTERY", label: "Poterie — Cours groupe" },
   { value: "PAINTING", label: "Peinture" },
-  { value: "BIRTHDAY", label: "Événement / Anniversaire" },
+  { value: "BIRTHDAY", label: "Événement" },
   { value: "COURS", label: "Cours" },
 ];
 
