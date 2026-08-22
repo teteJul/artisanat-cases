@@ -105,9 +105,6 @@ export default async function TarifsPage() {
               </div>
             ))}
           </div>
-          <p className="text-muted-foreground text-xs mt-3">
-            🏪 Également disponible sans réservation en boutique, sur les tables dédiées.
-          </p>
         </section>
       )}
 
