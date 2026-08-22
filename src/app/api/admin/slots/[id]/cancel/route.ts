@@ -111,7 +111,7 @@ export async function POST(
         <p>Bonjour ${booking.user.firstName ?? booking.user.name},</p>
         <p>Nous vous informons que le cours de <strong>${slot.serviceType.name}</strong> du
         <strong>${slotDate.toLocaleDateString("fr-FR")}</strong> à
-        <strong>${slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</strong>
+        <strong>${slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}</strong>
         a été annulé.</p>
         ${reason ? `<p>Raison : ${reason}</p>` : ""}
         <p>${action === "refund" ? "Un remboursement a été initié sur votre carte." : action === "credit" ? "Un avoir a été crédité sur votre compte." : ""}</p>

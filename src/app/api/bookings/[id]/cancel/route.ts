@@ -126,7 +126,7 @@ export async function POST(
     html: `
       <h2>Votre réservation a été annulée</h2>
       <p>Bonjour ${booking.user.firstName ?? booking.user.name ?? "Client"},</p>
-      <p>Votre réservation pour <strong>${booking.slot.serviceType.name}</strong> du <strong>${slotDateForEmail.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} à ${slotDateForEmail.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</strong> a bien été annulée.</p>
+      <p>Votre réservation pour <strong>${booking.slot.serviceType.name}</strong> du <strong>${slotDateForEmail.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" })} à ${slotDateForEmail.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}</strong> a bien été annulée.</p>
       ${canCancel && amountPaid > 0
         ? action === "refund"
           ? "<p>Un remboursement a été initié sur votre carte bancaire (3-5 jours ouvrés).</p>"
@@ -168,7 +168,7 @@ export async function POST(
         clientName: nextOnWaitlist.user.firstName ?? nextOnWaitlist.user.name ?? "Client",
         serviceName: booking.slot.serviceType.name,
         date: slotDate.toLocaleDateString("fr-FR"),
-        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }),
         bookingUrl,
       }),
     }).catch((e) => console.error("[cancel] Email waitlist échoué:", e));

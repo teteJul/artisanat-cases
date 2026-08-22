@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
         react: BookingReminderEmail({
           clientName: booking.user.firstName ?? booking.user.name ?? "Client",
           serviceName: booking.slot.serviceType.name,
-          date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }),
-          time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+          date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" }),
+          time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }),
           appUrl: process.env.NEXT_PUBLIC_APP_URL!,
         }),
       });

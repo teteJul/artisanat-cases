@@ -318,8 +318,8 @@ export async function POST(req: NextRequest) {
       react: BookingConfirmationEmail({
         clientName: fullBooking.user.firstName ?? fullBooking.user.name ?? "Client",
         serviceName: fullBooking.slot.serviceType.name,
-        date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
-        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+        date: slotDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }),
+        time: slotDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }),
         bookingId: fullBooking.id,
         participants: fullBooking.participants,
         paymentMethod: payLabel,
