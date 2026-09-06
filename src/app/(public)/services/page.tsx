@@ -68,11 +68,7 @@ export default async function ServicesPage() {
 
               <div className="p-8">
                 {service.description && (
-                  <p className="text-foreground leading-relaxed mb-6">
-                    {service.description.split(/\r?\n/).map((line, i, arr) => (
-                      <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
-                    ))}
-                  </p>
+                  <p className="text-foreground leading-relaxed mb-6 whitespace-pre-wrap">{service.description}</p>
                 )}
 
                 <div className="flex flex-wrap gap-4 mb-6">
