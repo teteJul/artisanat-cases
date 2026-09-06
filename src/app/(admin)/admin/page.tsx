@@ -95,9 +95,9 @@ export default async function AdminDashboardPage() {
                   <div>
                     <p className="text-sm font-medium text-foreground">{slot.serviceType.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(slot.startTime).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
+                      {new Date(slot.startTime).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Paris" })}
                       {" · "}
-                      {new Date(slot.startTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(slot.startTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}
                     </p>
                   </div>
                   <div className="text-right">
