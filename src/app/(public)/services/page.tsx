@@ -49,7 +49,7 @@ export default async function ServicesPage() {
       ) : (
         <div className="space-y-8">
           {serialized.map((service) => (
-            <section key={service.id} className="bg-card border border-border rounded-2xl overflow-hidden">
+            <section key={service.id} id={service.id} className="bg-card border border-border rounded-2xl overflow-hidden scroll-mt-24">
               <div className="bg-primary/10 px-8 py-6 border-b border-border">
                 <div className="flex items-start justify-between gap-4">
                   <div>

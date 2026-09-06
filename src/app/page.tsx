@@ -102,7 +102,7 @@ export default async function HomePage() {
                 <div className="flex items-center justify-between">
                   <span className="text-primary font-semibold">{formatPrice(Number(service.price))}</span>
                   <Link
-                    href="/services"
+                    href={`/services#${service.id}`}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
                   >
                     En savoir plus <ArrowRight className="w-3 h-3" />
