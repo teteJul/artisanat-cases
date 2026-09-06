@@ -143,7 +143,7 @@ export default async function HomePage() {
                   et ateliers planifiés.
                 </p>
                 <Link
-                  href="/tarifs"
+                  href="/catalogue"
                   className="inline-flex items-center gap-2 border border-primary text-primary px-5 py-2.5 rounded-lg font-medium hover:bg-primary hover:text-primary-foreground transition-colors text-sm"
                 >
                   Voir les pièces disponibles
