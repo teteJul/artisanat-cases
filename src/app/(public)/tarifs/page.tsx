@@ -133,27 +133,47 @@ export default async function TarifsPage() {
           <h2 className="font-heading text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
             <span className="text-3xl">🎂</span> Événement
           </h2>
-          {anniversaire.map((s) => (
-            <div key={s.id} className="bg-card border border-border rounded-xl p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">{s.name}</p>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    {s.durationMinutes} min · min 5 enfants, max {s.maxParticipants} enfants (3 à 15 ans) · max 3 adultes
-                  </p>
-                  <ul className="mt-4 space-y-1.5 text-sm text-foreground">
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />2h de poterie</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Décoration de l'atelier possible</li>
-                    <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-primary shrink-0" />Bon cadeau 1 cours offert à l'enfant fêté 🎁</li>
-                  </ul>
+          <div className="space-y-4">
+            {anniversaire.map((s) => {
+              let subtitle = `${s.durationMinutes} min · min 5 enfants, max ${s.maxParticipants} enfants (3 à 15 ans) · max 3 adultes`;
+              let priceLabel = "par enfant";
+              let bullets = ["2h de poterie", "Décoration de l'atelier possible", "Bon cadeau 1 cours offert à l'enfant fêté 🎁"];
+
+              if (s.name === "Anniversaire enfant") {
+                bullets = ["2h de poterie", "Vous êtes libre de décorer l'atelier comme vous le souhaitez", "Bon cadeau 1 cours offert à l'enfant fêté 🎁"];
+              } else if (s.name === "Atelier poterie pour les écoles et associations") {
+                subtitle = "tous publics · groupes max 15 personnes";
+                priceLabel = "par groupe";
+                bullets = ["1h30 de poterie par groupes de 15 personnes max", "Possibilités de me déplacer sur devis"];
+              } else if (s.name === "Privatisation de l'atelier") {
+                subtitle = "tous publics · max 12 personnes";
+                priceLabel = "par personne";
+                bullets = ["2h de poterie", "Vous êtes libre de décorer l'atelier comme vous le souhaitez"];
+              }
+
+              return (
+                <div key={s.id} className="bg-card border border-border rounded-xl p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    <div className="flex-1">
+                      <p className="font-semibold text-foreground">{s.name}</p>
+                      <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
+                      <ul className="mt-4 space-y-1.5 text-sm text-foreground">
+                        {bullets.map((b) => (
+                          <li key={b} className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-primary shrink-0" />{b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-heading text-3xl font-bold text-primary">{formatPrice(Number(s.price))}</p>
+                      <p className="text-muted-foreground text-sm">{priceLabel}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-heading text-3xl font-bold text-primary">{formatPrice(Number(s.price))}</p>
-                  <p className="text-muted-foreground text-sm">par enfant</p>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </section>
       )}
 
