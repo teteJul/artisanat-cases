@@ -35,7 +35,7 @@ export default function ContactPage() {
       <div className="text-center mb-12">
         <h1 className="font-heading text-4xl sm:text-5xl font-bold text-foreground mb-4">Contact</h1>
         <p className="text-muted-foreground text-lg max-w-md mx-auto">
-          Une question ? N'hésitez pas à nous écrire, nous répondons dans les meilleurs délais.
+          Une question ? N'hésitez pas à m'écrire, c'est toujours un plaisir d'échanger avec vous ! À très bientôt 🌼
         </p>
       </div>
 
