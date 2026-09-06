@@ -68,7 +68,7 @@ export default async function ServicesPage() {
 
               <div className="p-8">
                 {service.description && (
-                  <p className="text-foreground leading-relaxed mb-6">{service.description}</p>
+                  <p className="text-foreground leading-relaxed mb-6 whitespace-pre-wrap">{service.description}</p>
                 )}
 
                 <div className="flex flex-wrap gap-4 mb-6">
